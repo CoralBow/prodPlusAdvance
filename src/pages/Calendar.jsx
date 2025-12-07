@@ -28,14 +28,7 @@ function useHolidays() {
           "https://holidays-jp.github.io/api/v1/date.json"
         );
         const data = await res.json();
-
-        // 今年のデータのみをフィルタリング
-        const currentYear = new Date().getFullYear().toString();
-        const filtered = Object.fromEntries(
-          Object.entries(data).filter(([date]) => date.startsWith(currentYear))
-        );
-
-        setHolidays(filtered); // object内容: { "2025-01-01": "元日", ... }
+        setHolidays(data);  // object内容: { "2025-01-01": "元日", ... }
       } catch (error) {
         if (error.name !== "AbortError") setError("祝日の取得に失敗しました");
       }
