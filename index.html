@@ -1,10 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png+xml" href="/prodplus_logo_tr.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Productivity+</title>
+    <script>
+      // Check local storage or system preference immediately
+      if (
+        localStorage.theme === "dark" ||
+        (!("theme" in localStorage) &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        document.documentElement.classList.add("dark");
+        document.documentElement.style.backgroundColor = "#020617"; // Your dark mode bg color
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

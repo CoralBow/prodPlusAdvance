@@ -1,620 +1,457 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-
 import { addDays } from "date-fns";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  writeBatch,
+} from "firebase/firestore";
+import { db } from "../firebase";
+import { useTaskActions } from "../hooks/useTaskActions";
+import TaskItem from "../components/TaskItem";
 
-function Todo({ tasks, setTasks }) {
+function Todo({ tasks, user }) {
   const location = useLocation();
-
-  function openChildren(parentId) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === parentId ? { ...t, showChild: true } : t))
-    );
-  }
-
-  function expandParents(taskId) {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task || !task.parentId) return;
-
-    openChildren(task.parentId); // 親タスクから子リストを開く
-    expandParents(task.parentId);
-  }
-
   const taskRefs = useRef({});
-  // === 編集IDが渡されてきたら自動的に編集モードへ ===
+  const dateInputRef = useRef(null);
   const hasHandledJump = useRef(false);
 
-  useEffect(() => {
-    const editId = location.state?.editId;
-    if (!editId) return;
-
-    // オートスクロール２回目を止める
-    if (hasHandledJump.current) return;
-    hasHandledJump.current = true;
-
-    const task = tasks.find((t) => t.id === editId);
-    if (!task) return;
-
-    // 編集モードONにする
-    setEditingIndex(editId);
-    setEditTitle(task.title);
-    setEditDescription(task.description || "");
-    setEditDueDate(task.dueDate || "");
-
-    // 親タスクを開く
-    expandParents(editId);
-
-    // オートスクロール実施
-    setTimeout(() => {
-      const el = taskRefs.current[editId];
-      if (el) {
-        el.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }
-    }, 80);
-
-    // ２回目の動作を止めるためにeditIdをブラウザ上の履歴から取り消す
-    window.history.replaceState({}, "");
-  }, [location.state, tasks.length]);
-
+  const [uiState, setUiState] = useState({});
   const [title, setTitle] = useState("");
-  // コンポーネントのマウント時または日付パラメータ変更時にページ上部へスクロール
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [location.search]);
-
   const [description, setDescription] = useState("");
-  // 「?date=YYYY-MM-DD」が存在する場合は抽出
+  const [dueDate, setDueDate] = useState("");
+  const [repeat, setRepeat] = useState(false);
+  const [error, setError] = useState("");
+  const [editingTask, setEditingTask] = useState(null);
+  const [editState, setEditState] = useState({
+    title: "",
+    description: "",
+    dueDate: "",
+  });
+  const [sort, setSort] = useState("date");
+  const [hideDone, setHideDone] = useState(false);
+  const [showRepeating, setShowRepeating] = useState(false);
+  const [hideRepeating, setHideRepeating] = useState(false);
+  const [showNoDate, setShowNoDate] = useState(false);
+  const [deleteModal, setDeleteModal] = useState({
+    open: false,
+    target: null,
+    deleteAll: false,
+  });
+
+  const { toggleDone, performDelete, saveTaskEdit } = useTaskActions(
+    tasks,
+    setDeleteModal,
+  );
+
+  // --- URLパラメータによる日付プリセット処理 ---
   const params = new URLSearchParams(location.search);
   const presetDate = params.get("date");
-  const [dueDate, setDueDate] = useState(presetDate || "");
   useEffect(() => {
     if (presetDate) setDueDate(presetDate);
   }, [presetDate]);
 
-  const [repeat, setRepeat] = useState(false);
+  // --- HELPERS ---
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editDueDate, setEditDueDate] = useState("");
-
-  const today = new Date();
-  const [showRepeating, setShowRepeating] = useState(false);
-  const [showNoDate, setShowNoDate] = useState(false);
-  const [hideDone, setHideDone] = useState(false);
-  const [sort, setSort] = useState("date"); // 日付順 | タスク名順
-  const [error, setError] = useState("");
-  const [deleteModal, setDeleteModal] = useState({
-    open: false,
-    target: null, // タスクid
-    deleteAll: false, // チェックボックスにチェック有無
-  });
-
-  // フィルター機能
-  let displayedTasks = tasks.filter((t) => {
-    if (hideDone && t.done) return false;
-
-    const activeFilters = [];
-    if (showRepeating) activeFilters.push((x) => x.isRepeating);
-    if (showNoDate) activeFilters.push((x) => !x.dueDate);
-
-    if (activeFilters.length === 0) return true;
-
-    // インターセクション（すべてのフィルターはマッチしなければならない）
-    return activeFilters.every((fn) => fn(t));
-  });
-  // 親タスクが外れた場合子を見せる
-  const parentVisibility = new Map();
-  tasks.forEach((t) => {
-    if (!t.parentId) {
-      parentVisibility.set(t.id, t.showChild);
-    }
-  });
-
-  // 子タスクフィルタリング
-  displayedTasks = displayedTasks.filter((t) => {
-    if (!t.parentId) return true;
-    return parentVisibility.get(t.parentId);
-  });
-
-  // ソート機能
-  if (sort === "date") {
-    displayedTasks = [...displayedTasks].sort((a, b) => {
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate) - new Date(b.dueDate);
-    });
-  } else if (sort === "title") {
-    // 日本語化
-    displayedTasks = [...displayedTasks].sort((a, b) =>
-      a.title.localeCompare(b.title, "ja")
-    );
-  }
-
-  // ---- タスク追加 ----
-  const handleAddTask = () => {
-    setError(""); // clear previous errors
-
-    if (!title.trim()) return;
-    if (repeat && !dueDate) {
-      setError("繰り返しタスクには開始日が必要です。");
-      return;
-    }
-
-    const baseTask = {
-      id: Date.now(),
-      title,
-      description,
-      dueDate,
-      done: false,
-      showDesc: false,
-      isRepeating: repeat,
-      parentId: null,
-    };
-
-    // 繰り返しタスクの場合
-    if (repeat) {
-      const baseDate = new Date(dueDate);
-      const repeated = Array.from({ length: 29 }, (_, i) => ({
-        id: crypto.randomUUID(),
-        title,
-        description,
-        dueDate: addDays(baseDate, i + 1)
-          .toISOString()
-          .split("T")[0],
-        done: false,
-        showDesc: false,
-        parentId: baseTask.id,
-        showChild: false,
-      }));
-
-      setTasks([...tasks, baseTask, ...repeated]);
-    } else {
-      setTasks([...tasks, baseTask]);
-    }
-
-    setTitle("");
-    setDescription("");
-    setDueDate("");
-    setRepeat(false);
-  };
-
-  // ---- タスク編集 ----
-  function startEditTask(id) {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-    setEditingIndex(id);
-    setEditTitle(task.title);
-    setEditDescription(task.description || "");
-    setEditDueDate(task.dueDate || "");
-  }
-
-  function saveEditTask(id) {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-    const isParent = task.isRepeating && !task.parentId;
-
-    if (isParent) {
-      const applyToAll = confirm(
-        "この変更を全ての繰り返しタスクに適用しますか？"
-      );
-
-      setTasks((prev) =>
-        prev.map((t) => {
-          if (t.id === id || (applyToAll && t.parentId === task.id)) {
-            return {
-              ...t,
-              title: editTitle,
-              description: editDescription,
-              dueDate: editDueDate,
-            };
-          }
-          return t;
-        })
-      );
-    } else {
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                title: editTitle,
-                description: editDescription,
-                dueDate: editDueDate,
-              }
-            : t
-        )
-      );
-    }
-
-    setEditingIndex(null);
-  }
-
-  // ---- タスク削除① ----
-  function deleteTask(id) {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-
-    setDeleteModal({
-      open: true,
-      target: id,
-      deleteAll: false,
-      isRepeating: task.isRepeating,
-    });
-  }
-  function performDelete() {
-    const id = deleteModal.target;
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-
-    // 繰り返しタスクのすべてを削除する
-    if (deleteModal.deleteAll && task.isRepeating && !task.parentId) {
-      setTasks(tasks.filter((t) => t.parentId !== id && t.id !== id));
-    } else {
-      // 本タスクのみ削除
-      setTasks(
-        tasks
-          .filter((t) => t.id !== id)
-          .map(
-            (t) =>
-              t.parentId === id
-                ? { ...t, parentId: null, isRepeating: false }
-                : t //親のみ削除された場合子タスクを普通のタスクへ変換
-          )
-      );
-    }
-
-    setDeleteModal({ open: false, target: null, deleteAll: false });
-  }
-
-  // ---- タスク完了・未完了 ----
-  const toggleDone = (id) => {
-    setTasks(tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-  };
-
-  // ---- 詳細欄表示・非表示 ----
-  const toggleDescription = (id) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, showDesc: !t.showDesc } : t))
-    );
-  };
-  // ---- 繰り返しタスクの表示・非表示 ----
-  const toggleChildren = (parentId) => {
-    setTasks(
-      tasks.map((t) =>
-        t.id === parentId ? { ...t, showChild: !t.showChild } : t
-      )
-    );
-  };
-
-  // ---- 日付のフォーマット ----
   const formatDateJP = (dateStr) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
   };
 
-  return (
-    <div className="flex flex-col min-h-screen overflow-x-hidden">
-      <header className="p-4 text-center text-black-700 font-bold text-3xl">
-        📋 To-Doリスト
-      </header>
-      <main className="flex-1 flex justify-center items-start">
-        <div className="max-w-2xl w-full mx-auto mt-6 p-4">
-          <h4 className="text-2xl font-bold mb-4 text-blue-600">タスク作成</h4>
+  // --- 1. 自動スクロール（編集対象へジャンプ ---
+  useEffect(() => {
+    const editId = location.state?.editId;
+    if (!editId || hasHandledJump.current || tasks.length === 0) return;
 
-          {/* 入力フォーム */}
-          <div className="space-y-3 mb-6 flex flex-col items-start">
+    const task = tasks.find((t) => t.id === editId);
+    if (!task) return;
+
+    // 子タスクの場合は、先に親タスクを展開する必要がある
+    if (task.parentId) {
+      setUiState((prev) => ({
+        ...prev,
+        [task.parentId]: { ...prev[task.parentId], showChild: true },
+      }));
+    }
+
+    // DOM描画完了を待ってから該当タスクへスクロール
+    setTimeout(() => {
+      const el = taskRefs.current[editId];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        hasHandledJump.current = true;
+        // リロード時に再ジャンプしないよう履歴をクリア
+        window.history.replaceState({}, "");
+      }
+    }, 150);
+  }, [location.state, tasks]);
+
+  // --- 2. UI状態の整理（不要データのクリーンアップ） ---
+  useEffect(() => {
+    setUiState((prev) => {
+      const currentIds = new Set(tasks.map((t) => t.id));
+      const cleanState = {};
+      Object.keys(prev).forEach((key) => {
+        if (currentIds.has(key)) cleanState[key] = prev[key];
+      });
+      return cleanState;
+    });
+  }, [tasks.length]);
+
+  // --- 3. データ加工処理 ---
+
+  const { mainTasks, childrenMap } = useMemo(() => {
+    const children = {};
+    const main = [];
+    const parentIds = new Set(
+      tasks.filter((t) => !t.parentId).map((t) => t.id),
+    );
+    // 子タスクを親IDでグループ化し、複数filterを使わず1回で処理
+    tasks.forEach((t) => {
+      const isOrphan = t.parentId && !parentIds.has(t.parentId);
+      if (!t.parentId || isOrphan) {
+        if (hideDone && t.done) return;
+        if (hideRepeating && (t.isRepeating || isOrphan)) return;
+        if (showRepeating && !t.isRepeating && !isOrphan) return;
+        if (showNoDate && t.dueDate) return;
+        main.push(t);
+      } else {
+        if (!children[t.parentId]) children[t.parentId] = [];
+        children[t.parentId].push(t);
+      }
+    });
+
+    // 親タスクの並び替え
+    main.sort((a, b) => {
+      if (sort === "date") {
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      }
+      return a.title.localeCompare(b.title, "ja");
+    });
+
+    // 子タスクの並び替え
+    Object.keys(children).forEach((pid) => {
+      children[pid].sort((a, b) => {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        return (a.dueDate || "").localeCompare(b.dueDate || "");
+      });
+    });
+
+    return { mainTasks: main, childrenMap: children };
+  }, [tasks, hideDone, hideRepeating, showRepeating, showNoDate, sort]);
+
+  const handleAddTask = async () => {
+    if (!title.trim()) return;
+    if (repeat && !dueDate)
+      return setError("Repeating tasks require a start date.");
+
+    const baseRef = await addDoc(collection(db, "tasks"), {
+      userId: user.uid,
+      title,
+      description,
+      dueDate: dueDate || null,
+      done: false,
+      isRepeating: repeat,
+      parentId: null,
+      createdAt: serverTimestamp(),
+    });
+
+    if (repeat) {
+      const batch = writeBatch(db);
+      const baseDate = new Date(dueDate);
+      for (let i = 1; i <= 29; i++) {
+        const childRef = doc(collection(db, "tasks"));
+        batch.set(childRef, {
+          userId: user.uid,
+          title,
+          description,
+          dueDate: addDays(baseDate, i).toISOString().split("T")[0],
+          done: false,
+          isRepeating: false,
+          parentId: baseRef.id,
+          createdAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+    setTitle("");
+    setDescription("");
+    setDueDate("");
+    setRepeat(false);
+  };
+
+  const startEdit = (task) => {
+    setEditingTask(task.id);
+    setEditState({
+      title: task.title,
+      description: task.description || "",
+      dueDate: task.dueDate || "",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    await saveTaskEdit(
+      editingTask,
+      editState.title,
+      editState.description,
+      editState.dueDate,
+    );
+    setEditingTask(null);
+  };
+
+  const toggleDescription = (id) => {
+    setUiState((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], showDesc: !prev[id]?.showDesc },
+    }));
+  };
+
+  const toggleChildren = (id) => {
+    setUiState((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], showChild: !prev[id]?.showChild },
+    }));
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 pb-20">
+      <header className="pt-12 pb-6 text-center">
+        <h1 className="text-4xl font-black text-slate-800 dark:text-white">
+          📋 To-Doリスト
+        </h1>
+      </header>
+
+      <main className="flex-1 max-w-2xl w-full mx-auto p-4 space-y-8">
+        {/* タスク作成セクション */}
+        <section className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <h4 className="text-m font-black uppercase text-blue-600 mb-4">
+            タスク作成
+          </h4>
+          <div className="space-y-4">
             <input
               type="text"
-              placeholder="タスクを入力してください"
+              placeholder="タスク名"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full p-2 border rounded bg-white text-black"
+              className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 font-bold dark:text-white"
             />
             <textarea
-              placeholder="説明 (オプション)"
+              placeholder="内容詳細"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-2 border rounded bg-white text-black"
+              className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 text-sm min-h-[80px] dark:text-white"
             />
-            <div className="w-full relative">
-              <span
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-600 cursor-pointer"
-                onClick={() =>
-                  document.getElementById("dueDateInput-create")?.showPicker?.()
-                }
+            <div className="flex gap-4 items-center">
+              <div
+                className="relative w-full sm:w-1/2 cursor-pointer"
+                onClick={() => dateInputRef.current?.showPicker()}
               >
-                📅
-              </span>
-
-              <input
-                id="dueDateInput-create"
-                type="date"
-                value={dueDate}
-                onChange={(e) => {
-                  setDueDate(e.target.value);
-                  if (e.target.value) setError("");
-                }}
-                className={`pl-8 p-2 border rounded bg-white text-black w-full
-      [&::-webkit-calendar-picker-indicator]:pointer-events-none
-      [&::-webkit-calendar-picker-indicator]:opacity-0
-    ${repeat && !dueDate ? "border-red-500 bg-red-50" : ""}`}
-                onClick={(e) => e.target.showPicker?.()}
-              />
-
-              {error && <p className="text-red-600 text-sm mt-1">{error}</p>}
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg z-10 pointer-events-none">
+                  {" "}
+                  📅{" "}
+                </span>
+                <input
+                  ref={dateInputRef}
+                  id="dueDateInput-create"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => {
+                    setDueDate(e.target.value);
+                    if (e.target.value) setError("");
+                  }}
+                  className={`w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-800 dark:text-white appearance-none ${repeat && !dueDate ? "ring-2 ring-red-500 bg-red-50 dark:bg-red-900/20" : ""}`}
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={repeat}
+                  onChange={(e) => setRepeat(e.target.checked)}
+                  className="w-5 h-5"
+                />
+                <span className="text-xs font-black dark:text-slate-400">
+                  1か月間毎日繰り返す
+                </span>
+              </label>
             </div>
-
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                className="checkbox-blue"
-                checked={repeat}
-                onChange={(e) => {
-                  setRepeat(e.target.checked);
-                  if (!e.target.checked) setError(""); // チェック外されたらエラーをクリア
-                }}
-              />
-              <span>1か月間毎日繰り返す</span>
-            </label>
-
+            {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
             <button
               onClick={handleAddTask}
-              disabled={repeat && !dueDate}
-              className={`px-4 py-2 rounded text-white ${
-                repeat && !dueDate
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600"
-              }`}
+              className="w-full py-3 rounded-2xl bg-blue-600 text-white font-black shadow-lg"
             >
-              追加
+              タスクを追加する
             </button>
           </div>
-          <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-            <div className="flex space-x-4">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  className="checkbox-blue"
-                  checked={showRepeating}
-                  onChange={(e) => setShowRepeating(e.target.checked)}
-                />
-                <span>繰り返し</span>
-              </label>
+        </section>
 
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  className="checkbox-blue"
-                  checked={showNoDate}
-                  onChange={(e) => setShowNoDate(e.target.checked)}
-                />
-                <span>期限なし</span>
-              </label>
+        {/* フィルターセクション */}
+        <section className="flex flex-wrap items-center justify-between gap-4 px-2">
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-1 text-[12px] font-black text-slate-500">
+              <input
+                type="checkbox"
+                checked={showRepeating}
+                onChange={(e) => {
+                  setShowRepeating(e.target.checked);
+                  if (e.target.checked) setHideRepeating(false);
+                }}
+              />{" "}
+              繰り返しのみ
+            </label>
+            <label className="flex items-center gap-1 text-[12px] font-black text-slate-500">
+              <input
+                type="checkbox"
+                checked={hideRepeating}
+                onChange={(e) => {
+                  setHideRepeating(e.target.checked);
+                  if (e.target.checked) setShowRepeating(false);
+                }}
+              />{" "}
+              繰り返しを隠す
+            </label>
+            <label className="flex items-center gap-1 text-[12px] font-black text-slate-500">
+              <input
+                type="checkbox"
+                checked={showNoDate}
+                onChange={(e) => setShowNoDate(e.target.checked)}
+              />{" "}
+              期限なし
+            </label>
+            <label className="flex items-center gap-1 text-[12px] font-black text-slate-500">
+              <input
+                type="checkbox"
+                checked={hideDone}
+                onChange={(e) => setHideDone(e.target.checked)}
+              />{" "}
+              完了を隠す
+            </label>
+          </div>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="text-xs font-black text-blue-600 bg-transparent outline-none"
+          >
+            <option value="date">日付順</option>
+            <option value="title">名前順</option>
+          </select>
+        </section>
 
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  className="checkbox-blue"
-                  checked={hideDone}
-                  onChange={(e) => setHideDone(e.target.checked)}
-                />
-                <span>完了タスクを隠す</span>
-              </label>
+        {/* タスクリスト */}
+        <ul className="space-y-4">
+          {mainTasks.length === 0 ? (
+            <div className="text-center py-20 text-slate-400 font-bold">
+              タスクがありません 🎉
             </div>
-            <div>
-              <label className="mr-2">並び順:</label>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                className="border rounded px-2 py-1 bg-white"
+          ) : (
+            mainTasks.map((task) => (
+              <React.Fragment key={task.id}>
+                <TaskItem
+                  item={task}
+                  isEditing={editingTask === task.id}
+                  editState={editState}
+                  setEditState={setEditState}
+                  uiState={uiState[task.id]}
+                  today={today}
+                  onToggleDone={toggleDone}
+                  onStartEdit={startEdit}
+                  onSaveEdit={handleSaveEdit}
+                  onCancelEdit={() => setEditingTask(null)}
+                  onDelete={(id) =>
+                    setDeleteModal({
+                      open: true,
+                      target: id,
+                      deleteAll: false,
+                      isRepeating: task.isRepeating,
+                    })
+                  }
+                  onToggleDesc={toggleDescription}
+                  onToggleChildren={toggleChildren}
+                  childCount={childrenMap[task.id]?.length || 0}
+                  formatDateJP={formatDateJP}
+                  taskRef={(el) => (taskRefs.current[task.id] = el)}
+                />
+                {uiState[task.id]?.showChild &&
+                  childrenMap[task.id]?.map((child) => (
+                    <TaskItem
+                      key={child.id}
+                      item={child}
+                      isChild
+                      isEditing={editingTask === child.id}
+                      editState={editState}
+                      setEditState={setEditState}
+                      uiState={uiState[child.id]}
+                      today={today}
+                      onToggleDone={toggleDone}
+                      onStartEdit={startEdit}
+                      onSaveEdit={handleSaveEdit}
+                      onCancelEdit={() => setEditingTask(null)}
+                      onDelete={(id) =>
+                        setDeleteModal({
+                          open: true,
+                          target: id,
+                          deleteAll: false,
+                        })
+                      }
+                      onToggleDesc={toggleDescription}
+                      formatDateJP={formatDateJP}
+                      taskRef={(el) => (taskRefs.current[child.id] = el)}
+                    />
+                  ))}
+              </React.Fragment>
+            ))
+          )}
+        </ul>
+      </main>
+
+      {/*  削除確認モーダル */}
+      {deleteModal.open && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-[10000] p-4">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] max-w-sm w-full text-center">
+            <h2 className="text-xl font-black mb-2 dark:text-white">
+              削除しますか？
+            </h2>
+            {deleteModal.isRepeating && (
+              <label className="flex items-center justify-center gap-2 mb-6">
+                <input
+                  type="checkbox"
+                  checked={deleteModal.deleteAll}
+                  onChange={(e) =>
+                    setDeleteModal((p) => ({
+                      ...p,
+                      deleteAll: e.target.checked,
+                    }))
+                  }
+                />{" "}
+                全繰り返しタスクも削除
+              </label>
+            )}
+            <div className="flex gap-3">
+              <button
+                className="flex-1 py-3 bg-slate-100 rounded-2xl font-black"
+                onClick={() => setDeleteModal({ open: false })}
               >
-                <option value="date">日付順</option>
-                <option value="title">名前順</option>
-              </select>
+                キャンセル
+              </button>
+              <button
+                className="flex-1 py-3 bg-red-500 text-white rounded-2xl font-black"
+                onClick={() => performDelete(deleteModal)}
+              >
+                削除する
+              </button>
             </div>
           </div>
-
-          {/* タスクリスト */}
-          <ul className="space-y-3">
-            {displayedTasks.length === 0 ? (
-              <li className="text-gray-400 text-center">
-                タスクがありません 🎉
-              </li>
-            ) : (
-              displayedTasks.map((task) => {
-                const isOverdue =
-                  task.dueDate && new Date(task.dueDate) < today && !task.done;
-                const isChild = !!task.parentId;
-                const isEditing = editingIndex === task.id;
-                const hasChildren = tasks.some((t) => t.parentId === task.id);
-
-                return (
-                  <li
-                    key={task.id}
-                    ref={(el) => (taskRefs.current[task.id] = el)}
-                    className={`p-3 border rounded bg-gray-50 flex flex-col items-start ${
-                      isChild ? "ml-4 border-l-4 border-blue-300" : ""
-                    }`}
-                  >
-                    {isEditing ? (
-                      <>
-                        <input
-                          type="text"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          className="w-full p-1 border rounded bg-white"
-                        />
-                        <textarea
-                          value={editDescription}
-                          onChange={(e) => setEditDescription(e.target.value)}
-                          className="w-full p-1 border rounded bg-white"
-                        />
-                        <div className="w-full relative">
-                          <span
-                            className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-600 cursor-pointer"
-                            onClick={() =>
-                              document
-                                .getElementById(`dueDateInput-edit-${task.id}`)
-                                ?.showPicker?.()
-                            }
-                          >
-                            📅
-                          </span>
-
-                          <input
-                            id={`dueDateInput-edit-${task.id}`}
-                            type="date"
-                            value={editDueDate}
-                            onChange={(e) => setEditDueDate(e.target.value)}
-                            className="pl-8 p-2 border rounded bg-white text-black w-full  
-                             [&::-webkit-calendar-picker-indicator]:pointer-events-none
-                             [&::-webkit-calendar-picker-indicator]:opacity-0"
-                          />
-                        </div>
-
-                        <div className="flex space-x-2 mt-2">
-                          <button
-                            onClick={() => saveEditTask(task.id)}
-                            className="bg-green-500 text-white px-3 py-1 rounded"
-                          >
-                            💾 保存
-                          </button>
-                          <button
-                            onClick={() => setEditingIndex(null)}
-                            className="bg-gray-300 px-3 py-1 rounded"
-                          >
-                            ❌ キャンセル
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {/* ---タスクビュー --- */}
-                        <div className="flex items-center space-x-2 w-full justify-between">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              className="checkbox-blue"
-                              checked={task.done}
-                              onChange={() => toggleDone(task.id)}
-                            />
-                            <span
-                              className={`${
-                                task.done ? "line-through text-gray-400" : ""
-                              } ${isOverdue ? "text-red-600 font-bold" : ""}`}
-                            >
-                              {task.title}
-                            </span>
-                          </div>
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={() => startEditTask(task.id)}
-                              className="px-2 rounded bg-white"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => deleteTask(task.id)}
-                              className="px-2 rounded bg-white"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </div>
-                        {deleteModal.open && (
-                          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-                            <div className="bg-white p-6 rounded shadow-lg max-w-sm w-full">
-                              <h2 className="text-lg font-bold mb-4">
-                                削除しますか？
-                              </h2>
-
-                              {deleteModal.isRepeating && (
-                                <label className="flex items-center space-x-2 mb-4">
-                                  <input
-                                    type="checkbox"
-                                    className="checkbox-blue"
-                                    checked={deleteModal.deleteAll}
-                                    onChange={(e) =>
-                                      setDeleteModal((prev) => ({
-                                        ...prev,
-                                        deleteAll: e.target.checked,
-                                      }))
-                                    }
-                                  />
-                                  <span>全ての繰り返しタスクも削除する</span>
-                                </label>
-                              )}
-
-                              <div className="flex justify-end space-x-3">
-                                <button
-                                  className="px-4 py-2 bg-gray-300 rounded"
-                                  onClick={() =>
-                                    setDeleteModal({
-                                      open: false,
-                                      target: null,
-                                      deleteAll: false,
-                                    })
-                                  }
-                                >
-                                  キャンセル
-                                </button>
-
-                                <button
-                                  className="px-4 py-2 bg-red-500 text-white rounded"
-                                  onClick={performDelete}
-                                >
-                                  削除
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {task.description && (
-                          <button
-                            onClick={() => toggleDescription(task.id)}
-                            className="text-blue-700 hover:underline text-sm mt-1 bg-white"
-                          >
-                            {task.showDesc ? "－ 隠す" : "＋ 詳細"}
-                          </button>
-                        )}
-                        {task.showDesc && (
-                          <p className="mt-1 ml-6 text-gray-700">
-                            {task.description}
-                          </p>
-                        )}
-                        {task.dueDate && (
-                          <p
-                            className={`text-sm ${
-                              task.done ? "line-through text-gray-400" : ""
-                            } ${isOverdue ? "text-red-600 font-bold" : ""}`}
-                          >
-                            期限: {formatDateJP(task.dueDate)}
-                          </p>
-                        )}
-
-                        {hasChildren && (
-                          <button
-                            onClick={() => toggleChildren(task.id)}
-                            className="text-green-500 hover:underline text-sm mt-1 bg-white"
-                          >
-                            {task.showChild ? "－ 隠す" : "＋ 繰り返しタスク"}
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </li>
-                );
-              })
-            )}
-          </ul>
         </div>
-      </main>
+      )}
     </div>
   );
 }

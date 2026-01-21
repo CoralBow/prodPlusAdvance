@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   format,
   isToday,
+  parseISO,
   addMonths,
   subMonths,
   startOfMonth,
@@ -14,53 +15,123 @@ import {
   isSaturday,
   isSameMonth,
 } from "date-fns";
-import { truncateByWidth } from "../utils/truncateByWidth.js";
+import { ja } from "date-fns/locale";
+import toast from "react-hot-toast";
+import { useTaskActions } from "../hooks/useTaskActions";
+import Spinner from "../components/Spinner";
 
-// カスタムフック
+// カスタムフック（祝日取得用）
 function useHolidays() {
   const [holidays, setHolidays] = useState({});
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchHolidays = async () => {
       try {
         const res = await fetch(
-          "https://holidays-jp.github.io/api/v1/date.json"
+          "https://holidays-jp.github.io/api/v1/date.json",
+          { signal: controller.signal },
         );
         const data = await res.json();
-        setHolidays(data);  // object内容: { "2025-01-01": "元日", ... }
-      } catch (error) {
-        if (error.name !== "AbortError") setError("祝日の取得に失敗しました");
+        setHolidays(data);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          setError("祝日の取得に失敗しました");
+        }
       }
     };
 
     fetchHolidays();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   return { holidays, error };
 }
 
-function Calendar({ tasks, setTasks, weatherData, mapWeatherCode }) {
+function Calendar({ tasks, weatherData, mapWeatherCode }) {
   const [selectedDay, setSelectedDay] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const monthStart = useMemo(() => startOfMonth(currentMonth), [currentMonth]);
   const monthEnd = useMemo(() => endOfMonth(currentMonth), [currentMonth]);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const navigate = useNavigate();
 
   const startDate = useMemo(
     () => startOfWeek(monthStart, { weekStartsOn: 0 }),
-    [monthStart]
+    [monthStart],
   );
 
   const endDate = useMemo(
     () => endOfWeek(monthEnd, { weekStartsOn: 0 }),
-    [monthEnd]
+    [monthEnd],
   );
+
   const [deleteModal, setDeleteModal] = useState({
     open: false,
-    target: null, // タスクid
-    deleteAll: false, // チェックボックスにチェック有無
+    target: null,
+    deleteAll: false,
+    isRepeating: false,
   });
-  const navigate = useNavigate();
+
+  const { toggleDone, performDelete, saveTaskEdit } = useTaskActions(
+    tasks,
+    setDeleteModal,
+  );
+  const dateInputRef = useRef(null);
+  function deleteTask(id) {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    setDeleteModal({
+      open: true,
+      target: id,
+      deleteAll: false,
+      isRepeating: task.isRepeating && !task.parentId,
+    });
+  }
+
+  const handlePerformDelete = () => {
+    performDelete(deleteModal);
+  };
+
+  const startEdit = (task) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditDescription(task.description || "");
+    setEditDueDate(task.dueDate || "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTask) return;
+    if (!editTitle.trim()) {
+      toast.error("タスクのタイトルは必須です。");
+      return;
+    }
+
+    try {
+      await saveTaskEdit(
+        editingTask.id,
+        editTitle,
+        editDescription,
+        editDueDate,
+      );
+      setEditingTask(null);
+    } catch (error) {
+      toast.error("タスクの更新に失敗しました:" + error);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTask(null);
+  };
 
   const monthDays = eachDayOfInterval({
     start: startDate,
@@ -69,6 +140,7 @@ function Calendar({ tasks, setTasks, weatherData, mapWeatherCode }) {
   const tasksByDay = useMemo(() => {
     const map = {};
     for (const t of tasks) {
+      if (!t.dueDate) continue;
       if (!map[t.dueDate]) map[t.dueDate] = [];
       map[t.dueDate].push(t);
     }
@@ -86,322 +158,402 @@ function Calendar({ tasks, setTasks, weatherData, mapWeatherCode }) {
 
   const { holidays, error } = useHolidays();
 
-  const handleComplete = (id) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
-    );
-  };
-
-  // ---- タスク削除① ----
-  function deleteTask(id) {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-
-    setDeleteModal({
-      open: true,
-      target: id,
-      deleteAll: false,
-      isRepeating: task.isRepeating,
-    });
-  }
-  function performDelete() {
-    const id = deleteModal.target;
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-
-    // 繰り返しタスクのすべてを削除する
-    if (deleteModal.deleteAll && task.isRepeating && !task.parentId) {
-      setTasks(tasks.filter((t) => t.parentId !== id && t.id !== id));
-    } else {
-      // 本タスクのみ削除
-      setTasks(
-        tasks
-          .filter((t) => t.id !== id)
-          .map(
-            (t) =>
-              t.parentId === id
-                ? { ...t, parentId: null, isRepeating: false }
-                : t //親のみ削除された場合子タスクを普通のタスクへ変換
-          )
-      );
-    }
-
-    setDeleteModal({ open: false, target: null, deleteAll: false });
-  }
-
   const detailRefs = useRef({});
-  const handleDayClick = (dayStr) => {
-    setSelectedDay(dayStr);
-    const el = detailRefs.current[dayStr];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
-  if (!weatherData || Object.keys(weatherData).length === 0) {
+  useEffect(() => {
+    //  月が切り替わるたびに ref をクリアしてメモリ肥大化を防ぐ
+    detailRefs.current = {};
+  }, [currentMonth]);
+
+  useEffect(() => {
+    if (!selectedDay) return;
+    const timer = setTimeout(() => {
+      const el = detailRefs.current[selectedDay];
+      if (el) {
+        el.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest", 
+        });
+      }
+    }, 100); 
+
+    return () => clearTimeout(timer);
+  }, [selectedDay]);
+
+  const handleDayClick = (dayStr) => setSelectedDay(dayStr);
+
+  if (!Array.isArray(weatherData) || weatherData.length === 0) {
     return (
-      <p className="text-center text-gray-500">⏳ カレンダーを読み込み中…</p>
+      <div className="flex flex-col items-center justify-center p-20">
+        <Spinner />
+        <p className="mt-4 text-slate-500">読み込み中...</p>
+      </div>
     );
   }
 
+  const inputClass =
+    "w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all";
+  const checkboxClass =
+    "w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 bg-white dark:bg-slate-800 transition-all cursor-pointer";
   return (
-    <div className="flex flex-col min-h-screen overflow-x-hidden">
-      <div>
-        <header className="p-4 text-center text-black-700 font-bold text-3xl">
-          📅 カレンダー
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 pb-20">
+      <div className="max-w-4xl mx-auto p-4 space-y-6 pt-8">
+        {/* Header */}
+        <header className="text-center py-4">
+          <h1 className="text-3xl font-black text-slate-800 dark:text-white">
+            📅 カレンダー
+          </h1>
         </header>
-      </div>
-      <br />
-      <div className="flex justify-around items-center mb-4">
-        <button
-          className=" bg-white text-blue-600"
-          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-        >
-          ◀
-        </button>
-        <h4 className="text-2xl font-bold mb-4 text-blue-600">
-          {format(currentMonth, "yyyy年MM月")}
-        </h4>
-        <button
-          className=" bg-white text-blue-600"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-        >
-          ▶
-        </button>
-      </div>
-      {error && <p className="text-red-600">{error}</p>}
-      <div className="px-5 grid grid-cols-7 gap-0 sm:gap-1  w-full max-w-[840px] mx-auto">
-        {weekdays.map((d) => (
-          <div key={d} className="text-center font-bold ">
-            {d}
-          </div>
-        ))}
-      </div>
-      <div
-        className="grid p-2 sm:p-5 grid-cols-7 gap-0 sm:gap-1  
-      [grid-auto-rows:minmax(42px,auto)] sm:[grid-auto-rows:minmax(65px,auto)] 
-      md:[grid-auto-rows:minmax(90px,auto)]"
-      >
-        {monthDays.map((day) => {
-          const dayStr = format(day, "yyyy-MM-dd");
-          const dayTasks = tasksByDay[dayStr] || [];
 
-          const isHoliday = holidays[dayStr] !== undefined;
-          const holidayLabel = holidays[dayStr]
-            ? truncateByWidth(holidays[dayStr], "bold 10px sans-serif", 70)
-            : null;
+        {/* Month Navigation Card */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex justify-between items-center transition-all">
+          <button
+            className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 transition-colors"
+            onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+          >
+            ◀
+          </button>
+          <h4 className="text-xl font-black text-slate-800 dark:text-white">
+            {format(currentMonth, "yyyy年MM月")}
+          </h4>
+          <button
+            className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 transition-colors"
+            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          >
+            ▶
+          </button>
+        </div>
 
-          // タスク数制限
-          const limit = isHoliday ? 1 : 2;
+        {error && <p className="text-red-600 text-center font-bold">{error}</p>}
 
-          // タスクを分ける
-          const notDone = dayTasks.filter((t) => !t.done);
-          const done = dayTasks.filter((t) => t.done);
-
-          // 見えるタスクを洗い出す
-          let visibleTasks = notDone.slice(0, limit);
-
-          if (visibleTasks.length < limit) {
-            const remaining = limit - visibleTasks.length;
-            visibleTasks = [...visibleTasks, ...done.slice(0, remaining)];
-          }
-
-          // タスク数多い時の…を出す
-          const shouldShowEllipsis = dayTasks.length > visibleTasks.length;
-
-          const isCurrentMonth = isSameMonth(day, currentMonth);
-          const dayColor = isSunday(day)
-            ? "text-red-500 text-s truncate"
-            : isSaturday(day)
-            ? "text-blue-500 text-s truncate"
-            : isHoliday
-            ? "text-red-500 text-s truncate"
-            : " text-s truncate";
-          return (
-            <div
-              key={dayStr}
-              onClick={() => handleDayClick(dayStr)}
-              className={`border rounded-sm p-2 cursor-pointer flex flex-col items-start 
-    h-24 overflow-hidden transition
-    ${isToday(day) ? "border-black" : "border-gray-300"}
-    ${selectedDay === dayStr ? "border-blue-500 bg-blue-50" : ""}
-    hover:bg-gray-100`}
-            >
-              {/* ＜大きい画面＞日付 + 天気 （１列） */}
-              <div className="flex flex-col sm:flex-row justify-between w-full">
-                {/* ＜小さい画面＞日付 */}
-                <span
-                  className={`font-bold ${dayColor} ${
-                    !isCurrentMonth ? "text-gray-400" : ""
-                  } text-[12px] sm:text-base`}
-                >
-                  {format(day, "d")}
-                </span>
-
-                {/* ＜小さい画面＞天気 */}
-                {(() => {
-                  const weather = weatherDataByDate[dayStr];
-                  if (!weather) return null;
-
-                  const w = mapWeatherCode(weather.code);
-
-                  return (
-                    <div
-                      className="flex flex-row items-center gap-[2px] text-[10px] 
-                      leading-none max-sm:flex-col max-sm:items-end max-sm:gap-[0px] 
-                      max-sm:text-[9px]"
-                    >
-                      <span className="leading-none">{w.icon}</span>
-
-                      <span className="leading-none">
-                        {Math.round(weather.max)}°/{Math.round(weather.min)}°
-                      </span>
-                    </div>
-                  );
-                })()}
+        {/* メインカレンダー表示 */}
+        <div className="p-2 sm:p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+          {/* 曜日ヘッダー */}
+          <div className="grid grid-cols-7 mb-2">
+            {weekdays.map((d, i) => (
+              <div
+                key={d}
+                className={`text-center text-[11px] font-black uppercase tracking-wider ${
+                  i === 0
+                    ? "text-red-500"
+                    : i === 6
+                      ? "text-blue-500"
+                      : "text-slate-400"
+                }`}
+              >
+                {d}
               </div>
+            ))}
+          </div>
 
-              {/* 祝日名 */}
-              {holidayLabel && (
-                <p className="text-[9px] sm:text-[11px] font-bold text-red-500 text-left">
-                  {holidayLabel}
-                </p>
-              )}
+          {/* 日付グリッド */}
+          <div className="grid grid-cols-7 gap-0 sm:gap-2 border-t border-l border-slate-100 dark:border-slate-800 sm:border-none">
+            {monthDays.map((day) => {
+              const dayStr = format(day, "yyyy-MM-dd");
+              const dayTasks = tasksByDay[dayStr] || [];
+              const isHoliday = holidays[dayStr] !== undefined;
+              const isCurrentMonth = isSameMonth(day, currentMonth);
+              const isTodayDay = isToday(day);
+              const isSelected = selectedDay === dayStr;
 
-              {/* タスク */}
-              <div className="mt-1 flex-1 overflow-hidden min-h-[14px] w-full text-left">
-                {visibleTasks.map((t) => (
-                  <p
-                    key={t.id}
-                    className={`text-[10px] sm:text-xs font-bold truncate line-clamp-1 
-                      leading-tight ${
-                        t.done ? "line-through text-gray-400" : ""
-                      }`}
-                    title={t.title}
-                  >
-                    <p
-                      className="relative pl-3 before:absolute before:left-0 before:top-[6px] 
-                    before:w-1 before:h-1 before:bg-gray-700 before:rounded-full ..."
+              // 色分けロジック
+              let textColor = "text-slate-700 dark:text-slate-200";
+              if (!isCurrentMonth)
+                textColor = "text-slate-300 dark:text-slate-700";
+              else if (isSunday(day) || isHoliday) textColor = "text-red-500";
+              else if (isSaturday(day)) textColor = "text-blue-500";
+
+              return (
+                <div
+                  key={dayStr}
+                  onClick={() => handleDayClick(dayStr)}
+                  className={`
+                  relative flex flex-col items-start p-1 sm:p-2 h-24 sm:h-28 rounded-xl border transition-all cursor-pointer overflow-hidden
+                  ${
+                    isSelected
+                      ? "ring-2 ring-blue-500 border-transparent z-10"
+                      : "border-slate-100 dark:border-slate-800"
+                  }
+                  ${
+                    isTodayDay
+                      ? "bg-blue-50/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  }
+                `}
+                >
+                  {/* ＜大きい画面＞日付＋天気（1列表示）*/}
+                  <div className="flex justify-between w-full items-start">
+                    <span
+                      className={`text-xs sm:text-sm font-black ${textColor}`}
                     >
-                      {t.title}
-                    </p>
-                  </p>
-                ))}
+                      {format(day, "d")}
+                    </span>
 
-                {shouldShowEllipsis && (
-                  <p className="text-[10px] sm:text-xs text-gray-400">…</p>
+                    {(() => {
+                      const weather = weatherDataByDate[dayStr];
+                      if (!weather) return null;
+
+                      const w = mapWeatherCode(weather.code);
+
+                      return (
+                        <div
+                          className="flex flex-row items-center gap-[2px] text-[10px] 
+                      leading-none max-sm:flex-col max-sm:items-end max-sm:gap-[0px] 
+                      max-sm:text-[9px] text-slate-700 dark:text-slate-200"
+                        >
+                          <span className="leading-none">{w.icon}</span>
+
+                          <span className="leading-none hidden sm:inline">
+                            {Math.round(weather.max)}°/{Math.round(weather.min)}
+                            °
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* 祝日名 */}
+                  {isHoliday && isCurrentMonth && (
+                    <div className="text-[8px] sm:text-[10px] text-red-500 font-bold leading-none mb-1 truncate w-full">
+                      {holidays[dayStr]}
+                    </div>
+                  )}
+
+                  {/* タスク表示（最大3件） */}
+                  <div className="w-full mt-1 space-y-0.5 px-0">
+                    {dayTasks.slice(0, 3).map((t) => {
+                      const isOverdue =
+                        t.dueDate < format(new Date(), "yyyy-MM-dd") && !t.done;
+
+                      return (
+                        <div
+                          key={t.id}
+                          className={`
+                w-full truncate px-0.5 py-0
+                text-[7px] sm:text-[9px] 
+                h-3 sm:h-4 leading-[12px] sm:leading-[16px] text-left
+                ${
+                  t.done
+                    ? "bg-slate-100/50 dark:bg-slate-800 text-slate-400 line-through"
+                    : isOverdue
+                      ? "bg-red-500  dark:bg-red-800/70 text-white font-bold"
+                      : "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200"
+                }
+                sm:rounded-md
+              `}
+                        >
+                          {t.title}
+                        </div>
+                      );
+                    })}
+                    {dayTasks.length > 3 && (
+                      <div className="text-[7px] text-slate-400 font-bold pl-1">
+                        + {dayTasks.length - 3}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 選択中の日付の詳細表示（下部セクション）*/}
+        {selectedDay && (
+          <div
+            id={`detail-${selectedDay}`}
+            ref={(el) => (detailRefs.current[selectedDay] = el)}
+            className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-300"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white">
+                  {format(parseISO(selectedDay), "M月d日 (E)", { locale: ja })}
+                </h3>
+                {holidays[selectedDay] && (
+                  <span className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded-full">
+                    {holidays[selectedDay]}
+                  </span>
                 )}
               </div>
+              <button
+                onClick={() => navigate(`/todo?date=${selectedDay}`)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all"
+              >
+                <span className="text-lg">＋</span>{" "}
+                <span className="hidden sm:inline">タスク追加</span>
+              </button>
             </div>
-          );
-        })}
-      </div>
-      <div>
-        {selectedDay && (
-          <div className="mt-4 p-4 border rounded">
-            <h3 className="font-semibold">{selectedDay} の予定</h3>
-            <button
-              onClick={() => navigate(`/todo?date=${selectedDay}`)}
-              className="text-blue-500 bg-white hover:text-blue-700 text-lg"
-              title="この日にタスクを追加"
-            >
-              ➕
-            </button>
-            {holidays[selectedDay] && (
-              <p className="text-red-500">祝日: {holidays[selectedDay]}</p>
-            )}
-            <ul className="space-y-1">
-              {tasks.filter((t) => t.dueDate === selectedDay).length > 0 ? (
-                tasks
-                  .filter((t) => t.dueDate === selectedDay)
-                  .map((t) => (
-                    <li key={t.id} className="flex justify-between">
-                      {" "}
-                      <span>
-                        <input
-                          type="checkbox"
-                          className="checkbox-blue"
-                          checked={t.done}
-                          onChange={() => handleComplete(t.id)}
-                        />{" "}
-                        <span
-                          className={`list-decimal list-inside space-y-1 font-bold  ${
-                            t.done ? "line-through text-gray-400" : ""
-                          } `}
-                        >
-                          {t.title}{" "}
-                          {t.description ? "(" + t.description + ")" : ""}
-                        </span>
-                      </span>
-                      <div>
-                        <button
-                          onClick={() =>
-                            navigate("/todo", { state: { editId: t.id } })
-                          }
-                          className="px-2 rounded bg-white"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => deleteTask(t.id)}
-                          className="text-red-600 bg-white"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                      {deleteModal.open && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-                          <div className="bg-white p-6 rounded shadow-lg max-w-sm w-full">
-                            <h2 className="text-lg font-bold mb-4">
-                              削除しますか？
-                            </h2>
 
-                            {deleteModal.isRepeating && (
-                              <label className="flex items-center space-x-2 mb-4">
-                                <input
-                                  type="checkbox"
-                                  className="checkbox-blue"
-                                  checked={deleteModal.deleteAll}
-                                  onChange={(e) =>
-                                    setDeleteModal((prev) => ({
-                                      ...prev,
-                                      deleteAll: e.target.checked,
-                                    }))
-                                  }
-                                />
-                                <span>全ての繰り返しタスクも削除する</span>
-                              </label>
+            <div className="space-y-3">
+              {(() => {
+                const dayTasks = tasksByDay[selectedDay] || [];
+
+                if (dayTasks.length === 0) {
+                  return (
+                    <div className="text-center py-10 bg-slate-50 dark:bg-slate-800/20 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                      <p className="text-4xl mb-2">🎉</p>
+                      <p className="text-slate-500 dark:text-slate-400 font-bold">
+                        今日はタスクがありません
+                      </p>
+                    </div>
+                  );
+                }
+
+                return dayTasks.map((t) => {
+                  const isEditing = editingTask?.id === t.id;
+                  return (
+                    <div
+                      key={t.id}
+                      className={`group p-4 rounded-2xl border transition-all ${
+                        t.done
+                          ? "bg-slate-50/50 dark:bg-slate-800/30 border-slate-100 dark:border-slate-800"
+                          : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-300 dark:hover:border-blue-800"
+                      }`}
+                    >
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            className={inputClass}
+                            placeholder="タイトル"
+                          />
+                          <textarea
+                            value={editDescription}
+                            onChange={(e) => setEditDescription(e.target.value)}
+                            className={inputClass}
+                            placeholder="説明"
+                          />
+                          <div
+                            className="relative w-full sm:w-1/2 cursor-pointer"
+                            onClick={() => dateInputRef.current?.showPicker()}
+                          >
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg z-10 pointer-events-none">
+                              {" "}
+                              📅{" "}
+                            </span>
+                            <input
+                              ref={dateInputRef}
+                              id="dueDateInput-create"
+                              type="date"
+                              value={editDueDate}
+                              onChange={(e) => setEditDueDate(e.target.value)}
+                              className={`w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-800 dark:text-white appearance-none }`}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleSaveEdit}
+                              className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold"
+                            >
+                              保存
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="flex-1 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-bold"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="checkbox"
+                            checked={t.done}
+                            onChange={() => toggleDone(t.id, t.done)}
+                            className={checkboxClass}
+                          />
+
+                          <div className="text-left min-w-0">
+                            <p
+                              className={`font-bold truncate ${t.done ? "text-slate-400 line-through" : "text-slate-800 dark:text-slate-100"}`}
+                            >
+                              {t.title}
+                            </p>
+                            {t.description && (
+                              <p
+                                className={`text-xs truncate ${t.done ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}`}
+                              >
+                                {t.description}
+                              </p>
                             )}
+                          </div>
 
-                            <div className="flex justify-end space-x-3">
-                              <button
-                                className="px-4 py-2 bg-gray-300 rounded"
-                                onClick={() =>
-                                  setDeleteModal({
-                                    open: false,
-                                    target: null,
-                                    deleteAll: false,
-                                  })
-                                }
-                              >
-                                キャンセル
-                              </button>
-
-                              <button
-                                className="px-4 py-2 bg-red-500 text-white rounded"
-                                onClick={performDelete}
-                              >
-                                削除
-                              </button>
-                            </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => startEdit(t)}
+                              className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 transition-colors"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => deleteTask(t.id)}
+                              className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              🗑️
+                            </button>
                           </div>
                         </div>
                       )}
-                    </li>
-                  ))
-              ) : (
-                <p>今日はタスクがありません 🎉</p>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
+        {deleteModal.open && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+              <h2 className="text-xl font-black mb-2 text-slate-800 dark:text-white">
+                削除しますか？
+              </h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
+                この操作は取り消せません。
+              </p>
+
+              {deleteModal.isRepeating && (
+                <label className="flex items-center gap-3 mb-6 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className={checkboxClass}
+                    checked={deleteModal.deleteAll}
+                    onChange={(e) =>
+                      setDeleteModal((prev) => ({
+                        ...prev,
+                        deleteAll: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                    全ての繰り返しタスクも削除
+                  </span>
+                </label>
               )}
-            </ul>
+
+              <div className="flex gap-3">
+                <button
+                  className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                  onClick={() =>
+                    setDeleteModal({
+                      open: false,
+                      target: null,
+                      deleteAll: false,
+                    })
+                  }
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200 dark:shadow-none transition-all"
+                  onClick={handlePerformDelete}
+                >
+                  削除
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

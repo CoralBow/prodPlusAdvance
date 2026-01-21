@@ -2,19 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Remove the hardcoded #242424 and #ffffff from :root */
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
-  font-weight: 400;
+}
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+body {
+  margin: 0;
+  min-height: 100vh;
+  @apply transition-colors duration-300;
+  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300;
 }
 
 a {
@@ -25,13 +23,25 @@ a {
 a:hover {
   color: #535bf2;
 }
+input[type="date"] {
+  color-scheme: light;
+}
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    background: transparent;
+    bottom: 0;
+    color: transparent;
+    cursor: pointer;
+    height: auto;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: auto;
 }
 
 h1 {
@@ -51,11 +61,11 @@ button {
   transition: border-color 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: #ffffff;
 }
 button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  outline: none !important;
 }
 
 @media (prefers-color-scheme: light) {
@@ -70,5 +80,3 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
-
-
