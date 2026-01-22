@@ -233,6 +233,10 @@ export default function WordGame({ onFinish }) {
               <br />
               <span className="text-orange-400 font-bold text-xs">
                 ※システム上英語のみ入力可能です。
+                <br />
+                本機能は第三者提供の英語APIを使用しています。
+                <br />
+                APIの仕様により、意図しない関連語や不正確な結果が含まれる場合があります。
               </span>
             </p>
           </div>
