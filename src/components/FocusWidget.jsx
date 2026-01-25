@@ -15,8 +15,8 @@ export default function FocusWidget() {
   const { t } = useTranslation();
 
 
-  const FOCUS_TIME = 0.5 * 60;
-  const BREAK_TIME = 2 * 60;
+  const FOCUS_TIME = 25 * 60;
+  const BREAK_TIME = 5 * 60;
   const [seconds, setSeconds] = useState(FOCUS_TIME);
 
   const [showFinishedModal, setShowFinishedModal] = useState(false);
