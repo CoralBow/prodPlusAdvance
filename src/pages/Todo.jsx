@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { addDays } from "date-fns";
 import {
@@ -8,12 +15,13 @@ import {
   doc,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../firebase/config";
 import { useTaskActions } from "../hooks/useTaskActions";
 import TaskItem from "../components/TaskItem";
 
 function Todo({ tasks, user }) {
   const location = useLocation();
+  const { t, i18n } = useTranslation("common");
   const taskRefs = useRef({});
   const dateInputRef = useRef(null);
   const hasHandledJump = useRef(false);
@@ -60,18 +68,27 @@ function Todo({ tasks, user }) {
     return d;
   }, []);
 
-  const formatDateJP = (dateStr) => {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-  };
+  const isTitleValid = title.trim().length > 0;
+
+  const formatDate = useCallback(
+    (dateStr) => {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      return new Intl.DateTimeFormat(i18n.language, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }).format(d);
+    },
+    [i18n.language],
+  );
 
   // --- 1. 自動スクロール（編集対象へジャンプ ---
   useEffect(() => {
     const editId = location.state?.editId;
     if (!editId || hasHandledJump.current || tasks.length === 0) return;
 
-    const task = tasks.find((t) => t.id === editId);
+    const task = tasks.find((task) => task.id === editId);
     if (!task) return;
 
     // 子タスクの場合は、先に親タスクを展開する必要がある
@@ -97,7 +114,7 @@ function Todo({ tasks, user }) {
   // --- 2. UI状態の整理（不要データのクリーンアップ） ---
   useEffect(() => {
     setUiState((prev) => {
-      const currentIds = new Set(tasks.map((t) => t.id));
+      const currentIds = new Set(tasks.map((task) => task.id));
       const cleanState = {};
       Object.keys(prev).forEach((key) => {
         if (currentIds.has(key)) cleanState[key] = prev[key];
@@ -111,21 +128,33 @@ function Todo({ tasks, user }) {
   const { mainTasks, childrenMap } = useMemo(() => {
     const children = {};
     const main = [];
+
     const parentIds = new Set(
-      tasks.filter((t) => !t.parentId).map((t) => t.id),
+      tasks.filter((task) => !task.parentId).map((task) => task.id),
     );
-    // 子タスクを親IDでグループ化し、複数filterを使わず1回で処理
-    tasks.forEach((t) => {
-      const isOrphan = t.parentId && !parentIds.has(t.parentId);
-      if (!t.parentId || isOrphan) {
-        if (hideDone && t.done) return;
-        if (hideRepeating && (t.isRepeating || isOrphan)) return;
-        if (showRepeating && !t.isRepeating && !isOrphan) return;
-        if (showNoDate && t.dueDate) return;
-        main.push(t);
-      } else {
-        if (!children[t.parentId]) children[t.parentId] = [];
-        children[t.parentId].push(t);
+
+    tasks.forEach((task) => {
+      if (task.parentId) {
+        if (!children[task.parentId]) children[task.parentId] = [];
+        children[task.parentId].push(task);
+      }
+    });
+
+    tasks.forEach((task) => {
+      const isOrphan = task.parentId && !parentIds.has(task.parentId);
+      const isParent = !!children[task.id];
+      const allChildrenDone =
+        isParent && children[task.id].every((c) => c.done);
+
+      if (hideDone && task.done && isParent && allChildrenDone) return;
+      if (hideDone && task.done && !isParent) return;
+
+      if (!task.parentId || isOrphan) {
+        if (hideRepeating && (task.isRepeating || isOrphan)) return;
+        if (showRepeating && !task.isRepeating && !isOrphan) return;
+        if (showNoDate && task.dueDate) return;
+
+        main.push(task);
       }
     });
 
@@ -136,7 +165,7 @@ function Todo({ tasks, user }) {
         if (!b.dueDate) return -1;
         return a.dueDate.localeCompare(b.dueDate);
       }
-      return a.title.localeCompare(b.title, "ja");
+      return a.title.localeCompare(b.title, i18n.language);
     });
 
     // 子タスクの並び替え
@@ -148,12 +177,19 @@ function Todo({ tasks, user }) {
     });
 
     return { mainTasks: main, childrenMap: children };
-  }, [tasks, hideDone, hideRepeating, showRepeating, showNoDate, sort]);
+  }, [
+    tasks,
+    hideDone,
+    hideRepeating,
+    showRepeating,
+    showNoDate,
+    sort,
+    i18n.language,
+  ]);
 
   const handleAddTask = async () => {
     if (!title.trim()) return;
-    if (repeat && !dueDate)
-      return setError("Repeating tasks require a start date.");
+    if (repeat && !dueDate) return setError(t("todo.error_repeating_date"));
 
     const baseRef = await addDoc(collection(db, "tasks"), {
       userId: user.uid,
@@ -227,7 +263,7 @@ function Todo({ tasks, user }) {
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 pb-20">
       <header className="pt-12 pb-6 text-center">
         <h1 className="text-4xl font-black text-slate-800 dark:text-white">
-          📋 To-Doリスト
+          📋 {t("todo.title")}
         </h1>
       </header>
 
@@ -235,19 +271,31 @@ function Todo({ tasks, user }) {
         {/* タスク作成セクション */}
         <section className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <h4 className="text-m font-black uppercase text-blue-600 mb-4">
-            タスク作成
+            {t("todo.create_section")}
           </h4>
           <div className="space-y-4">
             <input
               type="text"
-              placeholder="タスク名"
+              placeholder={t("todo.placeholder_title")}
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 font-bold dark:text-white"
+              maxLength={200}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (error) setError("");
+              }}
+              className={`w-full p-3 rounded-2xl font-bold dark:text-white
+    bg-slate-50 dark:bg-slate-800
+    ${
+      !isTitleValid
+        ? "ring-2 ring-red-500 bg-red-50 dark:bg-red-900/20"
+        : "focus:ring-2 focus:ring-blue-500"
+    }
+  `}
             />
             <textarea
-              placeholder="内容詳細"
+              placeholder={t("todo.placeholder_desc")}
               value={description}
+              maxLength={1000}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 text-sm min-h-[80px] dark:text-white"
             />
@@ -280,16 +328,23 @@ function Todo({ tasks, user }) {
                   className="w-5 h-5"
                 />
                 <span className="text-xs font-black dark:text-slate-400">
-                  1か月間毎日繰り返す
+                  {t("todo.repeat_label")}
                 </span>
               </label>
             </div>
             {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
             <button
               onClick={handleAddTask}
-              className="w-full py-3 rounded-2xl bg-blue-600 text-white font-black shadow-lg"
+              disabled={!isTitleValid}
+              className={`w-full py-3 rounded-2xl font-black shadow-lg transition-all
+    ${
+      isTitleValid
+        ? "bg-blue-600 text-white active:scale-95"
+        : "bg-slate-300 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
+    }
+  `}
             >
-              タスクを追加する
+              {t("todo.add_button")}
             </button>
           </div>
         </section>
@@ -306,7 +361,7 @@ function Todo({ tasks, user }) {
                   if (e.target.checked) setHideRepeating(false);
                 }}
               />{" "}
-              繰り返しのみ
+              {t("todo.filter_only_repeating")}
             </label>
             <label className="flex items-center gap-1 text-[12px] font-black text-slate-500">
               <input
@@ -317,7 +372,7 @@ function Todo({ tasks, user }) {
                   if (e.target.checked) setShowRepeating(false);
                 }}
               />{" "}
-              繰り返しを隠す
+              {t("todo.filter_hide_repeating")}
             </label>
             <label className="flex items-center gap-1 text-[12px] font-black text-slate-500">
               <input
@@ -325,7 +380,7 @@ function Todo({ tasks, user }) {
                 checked={showNoDate}
                 onChange={(e) => setShowNoDate(e.target.checked)}
               />{" "}
-              期限なし
+              {t("todo.filter_no_date")}
             </label>
             <label className="flex items-center gap-1 text-[12px] font-black text-slate-500">
               <input
@@ -333,7 +388,7 @@ function Todo({ tasks, user }) {
                 checked={hideDone}
                 onChange={(e) => setHideDone(e.target.checked)}
               />{" "}
-              完了を隠す
+              {t("todo.filter_hide_done")}
             </label>
           </div>
           <select
@@ -341,8 +396,8 @@ function Todo({ tasks, user }) {
             onChange={(e) => setSort(e.target.value)}
             className="text-xs font-black text-blue-600 bg-transparent outline-none"
           >
-            <option value="date">日付順</option>
-            <option value="title">名前順</option>
+            <option value="date">{t("todo.sort_date")}</option>
+            <option value="title">{t("todo.sort_name")}</option>
           </select>
         </section>
 
@@ -350,7 +405,7 @@ function Todo({ tasks, user }) {
         <ul className="space-y-4">
           {mainTasks.length === 0 ? (
             <div className="text-center py-20 text-slate-400 font-bold">
-              タスクがありません 🎉
+              {t("todo.empty_state")}
             </div>
           ) : (
             mainTasks.map((task) => (
@@ -377,7 +432,7 @@ function Todo({ tasks, user }) {
                   onToggleDesc={toggleDescription}
                   onToggleChildren={toggleChildren}
                   childCount={childrenMap[task.id]?.length || 0}
-                  formatDateJP={formatDateJP}
+                  formatDate={formatDate}
                   taskRef={(el) => (taskRefs.current[task.id] = el)}
                 />
                 {uiState[task.id]?.showChild &&
@@ -403,7 +458,7 @@ function Todo({ tasks, user }) {
                         })
                       }
                       onToggleDesc={toggleDescription}
-                      formatDateJP={formatDateJP}
+                      formatDate={formatDate}
                       taskRef={(el) => (taskRefs.current[child.id] = el)}
                     />
                   ))}
@@ -418,7 +473,7 @@ function Todo({ tasks, user }) {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-[10000] p-4">
           <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] max-w-sm w-full text-center">
             <h2 className="text-xl font-black mb-2 dark:text-white">
-              削除しますか？
+              {t("todo.delete_modal_title")}
             </h2>
             {deleteModal.isRepeating && (
               <label className="flex items-center justify-center gap-2 mb-6">
@@ -432,7 +487,7 @@ function Todo({ tasks, user }) {
                     }))
                   }
                 />{" "}
-                全繰り返しタスクも削除
+                {t("todo.delete_modal_all_repeating")}
               </label>
             )}
             <div className="flex gap-3">
@@ -440,13 +495,13 @@ function Todo({ tasks, user }) {
                 className="flex-1 py-3 bg-slate-100 rounded-2xl font-black"
                 onClick={() => setDeleteModal({ open: false })}
               >
-                キャンセル
+                {t("todo.cancel")}
               </button>
               <button
                 className="flex-1 py-3 bg-red-500 text-white rounded-2xl font-black"
                 onClick={() => performDelete(deleteModal)}
               >
-                削除する
+                {t("todo.delete")}
               </button>
             </div>
           </div>

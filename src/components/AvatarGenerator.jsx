@@ -1,4 +1,7 @@
+import { useTranslation } from "react-i18next";
+
 export default function AvatarGenerator({ onSelect }) {
+   const { t } = useTranslation();
   function newSeed() {
     return Math.random().toString(36).slice(2, 10);
   }
@@ -15,7 +18,7 @@ export default function AvatarGenerator({ onSelect }) {
       className="bg-green-600 text-white px-3 py-2 rounded"
       onClick={handleClick}
     >
-      アバター生成
+      {t("settings.generate")}
     </button>
   );
 }

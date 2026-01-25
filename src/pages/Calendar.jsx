@@ -15,7 +15,8 @@ import {
   isSaturday,
   isSameMonth,
 } from "date-fns";
-import { ja } from "date-fns/locale";
+import { ja, ru, enUS } from "date-fns/locale";
+import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 import { useTaskActions } from "../hooks/useTaskActions";
 import Spinner from "../components/Spinner";
@@ -38,7 +39,7 @@ function useHolidays() {
         setHolidays(data);
       } catch (err) {
         if (err.name !== "AbortError") {
-          setError("祝日の取得に失敗しました");
+          setError("fetch_holidays_failed"); 
         }
       }
     };
@@ -54,6 +55,20 @@ function useHolidays() {
 }
 
 function Calendar({ tasks, weatherData, mapWeatherCode }) {
+  const { t, i18n } = useTranslation();
+  
+  // date-fns locale mapping
+  const dateFnsLocale = useMemo(() => {
+    switch (i18n.language) {
+      case "ja":
+        return ja;
+      case "ru":
+        return ru;
+      default:
+        return enUS;
+    }
+  }, [i18n.language]);
+
   const [selectedDay, setSelectedDay] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const monthStart = useMemo(() => startOfMonth(currentMonth), [currentMonth]);
@@ -87,7 +102,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
   );
   const dateInputRef = useRef(null);
   function deleteTask(id) {
-    const task = tasks.find((t) => t.id === id);
+    const task = tasks.find((task) => task.id === id);
     if (!task) return;
 
     setDeleteModal({
@@ -112,7 +127,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
   const handleSaveEdit = async () => {
     if (!editingTask) return;
     if (!editTitle.trim()) {
-      toast.error("タスクのタイトルは必須です。");
+      toast.error(t("calendar.task_title_required"));
       return;
     }
 
@@ -125,7 +140,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
       );
       setEditingTask(null);
     } catch (error) {
-      toast.error("タスクの更新に失敗しました:" + error);
+      toast.error(t("calendar.task_update_failed") + error);
     }
   };
 
@@ -139,15 +154,15 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
   });
   const tasksByDay = useMemo(() => {
     const map = {};
-    for (const t of tasks) {
-      if (!t.dueDate) continue;
-      if (!map[t.dueDate]) map[t.dueDate] = [];
-      map[t.dueDate].push(t);
+    for (const task of tasks) {
+      if (!task.dueDate) continue;
+      if (!map[task.dueDate]) map[task.dueDate] = [];
+      map[task.dueDate].push(task);
     }
     return map;
   }, [tasks]);
 
-  const weekdays = ["(日)", "(月)", "(火)", "(水)", "(木)", "(金)", "(土)"];
+  const weekdays = t("calendar.weekdays", { returnObjects: true });
   const weatherDataByDate = useMemo(() => {
     const map = {};
     for (const w of weatherData) {
@@ -185,7 +200,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
     return (
       <div className="flex flex-col items-center justify-center p-20">
         <Spinner />
-        <p className="mt-4 text-slate-500">読み込み中...</p>
+        <p className="mt-4 text-slate-500">{t("calendar.loading")}</p>
       </div>
     );
   }
@@ -200,7 +215,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
         {/* Header */}
         <header className="text-center py-4">
           <h1 className="text-3xl font-black text-slate-800 dark:text-white">
-            📅 カレンダー
+            {t("calendar.title")}
           </h1>
         </header>
 
@@ -213,7 +228,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
             ◀
           </button>
           <h4 className="text-xl font-black text-slate-800 dark:text-white">
-            {format(currentMonth, "yyyy年MM月")}
+            {format(currentMonth, t("calendar.format_month"), { locale: dateFnsLocale })}
           </h4>
           <button
             className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 transition-colors"
@@ -223,7 +238,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
           </button>
         </div>
 
-        {error && <p className="text-red-600 text-center font-bold">{error}</p>}
+        {error && <p className="text-red-600 text-center font-bold">{t(`calendar.${error}`, { defaultValue: error })}</p>}
 
         {/* メインカレンダー表示 */}
         <div className="p-2 sm:p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -320,19 +335,19 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
 
                   {/* タスク表示（最大3件） */}
                   <div className="w-full mt-1 space-y-0.5 px-0">
-                    {dayTasks.slice(0, 3).map((t) => {
+                    {dayTasks.slice(0, 3).map((task) => {
                       const isOverdue =
-                        t.dueDate < format(new Date(), "yyyy-MM-dd") && !t.done;
+                        task.dueDate < format(new Date(), "yyyy-MM-dd") && !task.done;
 
                       return (
                         <div
-                          key={t.id}
+                          key={task.id}
                           className={`
                 w-full truncate px-0.5 py-0
                 text-[7px] sm:text-[9px] 
                 h-3 sm:h-4 leading-[12px] sm:leading-[16px] text-left
                 ${
-                  t.done
+                  task.done
                     ? "bg-slate-100/50 dark:bg-slate-800 text-slate-400 line-through"
                     : isOverdue
                       ? "bg-red-500  dark:bg-red-800/70 text-white font-bold"
@@ -341,7 +356,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                 sm:rounded-md
               `}
                         >
-                          {t.title}
+                          {task.title}
                         </div>
                       );
                     })}
@@ -367,7 +382,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-xl font-black text-slate-800 dark:text-white">
-                  {format(parseISO(selectedDay), "M月d日 (E)", { locale: ja })}
+                  {format(parseISO(selectedDay), t("calendar.format_day"), { locale: dateFnsLocale })}
                 </h3>
                 {holidays[selectedDay] && (
                   <span className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded-full">
@@ -380,7 +395,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all"
               >
                 <span className="text-lg">＋</span>{" "}
-                <span className="hidden sm:inline">タスク追加</span>
+                <span className="hidden sm:inline">{t("calendar.add_task")}</span>
               </button>
             </div>
 
@@ -393,19 +408,19 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                     <div className="text-center py-10 bg-slate-50 dark:bg-slate-800/20 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
                       <p className="text-4xl mb-2">🎉</p>
                       <p className="text-slate-500 dark:text-slate-400 font-bold">
-                        今日はタスクがありません
+                        {t("calendar.no_tasks")}
                       </p>
                     </div>
                   );
                 }
 
-                return dayTasks.map((t) => {
-                  const isEditing = editingTask?.id === t.id;
+                return dayTasks.map((task) => {
+                  const isEditing = editingTask?.id === task.id;
                   return (
                     <div
-                      key={t.id}
+                      key={task.id}
                       className={`group p-4 rounded-2xl border transition-all ${
-                        t.done
+                        task.done
                           ? "bg-slate-50/50 dark:bg-slate-800/30 border-slate-100 dark:border-slate-800"
                           : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-300 dark:hover:border-blue-800"
                       }`}
@@ -417,13 +432,13 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                             value={editTitle}
                             onChange={(e) => setEditTitle(e.target.value)}
                             className={inputClass}
-                            placeholder="タイトル"
+                            placeholder={t("calendar.placeholder_title")}
                           />
                           <textarea
                             value={editDescription}
                             onChange={(e) => setEditDescription(e.target.value)}
                             className={inputClass}
-                            placeholder="説明"
+                            placeholder={t("calendar.placeholder_description")}
                           />
                           <div
                             className="relative w-full sm:w-1/2 cursor-pointer"
@@ -447,13 +462,13 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                               onClick={handleSaveEdit}
                               className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold"
                             >
-                              保存
+                              {t("calendar.save")}
                             </button>
                             <button
                               onClick={handleCancelEdit}
                               className="flex-1 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-bold"
                             >
-                              キャンセル
+                              {t("calendar.cancel")}
                             </button>
                           </div>
                         </div>
@@ -461,35 +476,35 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                         <div className="flex items-center gap-4">
                           <input
                             type="checkbox"
-                            checked={t.done}
-                            onChange={() => toggleDone(t.id, t.done)}
+                            checked={task.done}
+                            onChange={() => toggleDone(task.id, task.done)}
                             className={checkboxClass}
                           />
 
                           <div className="text-left min-w-0">
                             <p
-                              className={`font-bold truncate ${t.done ? "text-slate-400 line-through" : "text-slate-800 dark:text-slate-100"}`}
+                              className={`font-bold truncate ${task.done ? "text-slate-400 line-through" : "text-slate-800 dark:text-slate-100"}`}
                             >
-                              {t.title}
+                              {task.title}
                             </p>
-                            {t.description && (
+                            {task.description && (
                               <p
-                                className={`text-xs truncate ${t.done ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}`}
+                                className={`text-xs truncate ${task.done ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}`}
                               >
-                                {t.description}
+                                {task.description}
                               </p>
                             )}
                           </div>
 
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => startEdit(t)}
+                              onClick={() => startEdit(task)}
                               className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 transition-colors"
                             >
                               ✏️
                             </button>
                             <button
-                              onClick={() => deleteTask(t.id)}
+                              onClick={() => deleteTask(task.id)}
                               className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 transition-colors"
                             >
                               🗑️
@@ -508,10 +523,10 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
               <h2 className="text-xl font-black mb-2 text-slate-800 dark:text-white">
-                削除しますか？
+                {t("calendar.delete_confirm_title")}
               </h2>
               <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
-                この操作は取り消せません。
+                {t("calendar.delete_confirm_desc")}
               </p>
 
               {deleteModal.isRepeating && (
@@ -528,7 +543,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                     }
                   />
                   <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                    全ての繰り返しタスクも削除
+                    {t("calendar.delete_repeat_tasks")}
                   </span>
                 </label>
               )}
@@ -544,13 +559,13 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                     })
                   }
                 >
-                  キャンセル
+                  {t("calendar.cancel")}
                 </button>
                 <button
                   className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200 dark:shadow-none transition-all"
                   onClick={handlePerformDelete}
                 >
-                  削除
+                  {t("calendar.delete")}
                 </button>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { doc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
-import { db } from "../firebase"; 
+import { db } from "../firebase/config";
 
 /**
  * タスク関連の Firestore 操作をまとめたカスタムフック
@@ -16,8 +16,10 @@ export function useTaskActions(tasks, setDeleteModal) {
                 completedAt: !currentDoneStatus ? serverTimestamp() : null
             });
 
-        } catch (error) {
-            console.error("エラー発生：", error);
+        } catch (e) {
+            if (import.meta.env.MODE === "development") {
+          console.error(e);
+        }
         }
     };
 
@@ -59,8 +61,10 @@ export function useTaskActions(tasks, setDeleteModal) {
             
             // ※ tasks の state 更新は Firestore リスナー側で処理される
 
-        } catch (error) {
-            console.error("Error performing task deletion:", error);
+        } catch (e) {
+            if (import.meta.env.MODE === "development") {
+          console.error(e);
+        }
         } finally {
             // 成否に関わらずモーダルを閉じる
             setDeleteModal({ open: false, target: null, deleteAll: false, isRepeating: false });
@@ -77,7 +81,9 @@ export function useTaskActions(tasks, setDeleteModal) {
             });
             return true; 
         } catch (error) {
-            console.error("更新時エラー発生：", error);
+            if (import.meta.env.MODE === "development") {
+          console.error(error);
+        }
            throw error; 
         }
     };

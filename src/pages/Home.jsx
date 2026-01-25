@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { format, parseISO } from "date-fns";
+import { ja, ru, enUS } from "date-fns/locale";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ja } from "date-fns/locale";
 
 import { shouldShowUmbrellaAlert } from "../utils/shouldShowUmbrellaAlert";
 import Spinner from "../components/Spinner";
@@ -19,6 +20,14 @@ export default function Home({
   weatherData,
   loadingWeather,
 }) {
+  const { t, i18n } = useTranslation();
+
+  const dateLocale = useMemo(() => {
+    if (i18n.language === "ja") return ja;
+    if (i18n.language === "ru") return ru;
+    return enUS;
+  }, [i18n.language]);
+
   const todayISO = useMidnight();
   const { quote, loadingQuote } = useDailyQuote(todayISO);
 
@@ -26,20 +35,20 @@ export default function Home({
   const navigate = useNavigate();
 
   const todaysTasks = useMemo(() => {
-    const filtered = tasks.filter((t) => {
+    const filtered = tasks.filter((task) => {
       // 期限が設定されているタスクの場合
-      if (t.dueDate) {
+      if (task.dueDate) {
         // 今日が期限、または期限切れかつ未完了のタスクを表示
-        const isPastOrToday = t.dueDate <= todayISO;
+        const isPastOrToday = task.dueDate <= todayISO;
 
         if (isPastOrToday) {
-          if (!t.done) return true; // 期限切れ・本日分の未完了タスクはすべて表示
+          if (!task.done) return true; // 期限切れ・本日分の未完了タスクはすべて表示
 
           // 完了済みの場合は「今日完了したもの」のみ表示
-          if (t.completedAt) {
-            const doneDate = t.completedAt.toDate
-              ? t.completedAt.toDate()
-              : new Date(t.completedAt);
+          if (task.completedAt) {
+            const doneDate = task.completedAt.toDate
+              ? task.completedAt.toDate()
+              : new Date(task.completedAt);
 
             return format(doneDate, "yyyy-MM-dd") === todayISO;
           }
@@ -48,14 +57,14 @@ export default function Home({
       }
 
       // 期限が設定されていないタスクの場合
-      if (!t.dueDate) {
-        if (!t.done) return true; // 未完了のタスクは常に表示
+      if (!task.dueDate) {
+        if (!task.done) return true; // 未完了のタスクは常に表示
 
         // 完了済みの場合は今日完了したもののみ表示
-        if (t.completedAt) {
-          const doneDate = t.completedAt.toDate
-            ? t.completedAt.toDate()
-            : new Date(t.completedAt);
+        if (task.completedAt) {
+          const doneDate = task.completedAt.toDate
+            ? task.completedAt.toDate()
+            : new Date(task.completedAt);
 
           return format(doneDate, "yyyy-MM-dd") === todayISO;
         }
@@ -78,9 +87,9 @@ export default function Home({
       if (!a.dueDate && b.dueDate) return 1;
 
       // 第2優先：タイトル順（日本語対応）
-      return a.title.localeCompare(b.title, "ja");
+      return a.title.localeCompare(b.title, i18n.language);
     });
-  }, [tasks, todayISO]);
+  }, [i18n.language, tasks, todayISO]);
 
   // -------------------------
   // 天気予報データ
@@ -95,8 +104,12 @@ export default function Home({
   const [dismissedMap, setDismissedMap] = useState({});
 
   useEffect(() => {
-    const raw = localStorage.getItem("umbrellaDismissedMap");
-    if (raw) setDismissedMap(JSON.parse(raw));
+    try {
+      const raw = localStorage.getItem("umbrellaDismissedMap");
+      if (raw) setDismissedMap(JSON.parse(raw));
+    } catch {
+      setDismissedMap({});
+    }
   }, []);
 
   const dismissTaskAlert = (taskId) => {
@@ -110,16 +123,16 @@ export default function Home({
     setDismissedMap(updated);
     localStorage.setItem("umbrellaDismissedMap", JSON.stringify(updated));
   };
-  const umbrellaTasks = tasks.filter((t) => t.dueDate === todayISO);
-  const tasksNeedingUmbrella =
-    todayWeather && tasks.length
-      ? umbrellaTasks.filter((t) => {
-          const dismissedForToday = dismissedMap[todayISO] || {};
-          const dismissed = dismissedForToday[t.id];
-
-          return !dismissed && shouldShowUmbrellaAlert([t], todayWeather);
-        })
-      : [];
+  const umbrellaTasks = tasks.filter((task) => task.dueDate === todayISO);
+  const tasksNeedingUmbrella = todayWeather
+    ? umbrellaTasks.filter((task) => {
+        const dismissedForToday = dismissedMap[todayISO] || {};
+        return (
+          !dismissedForToday[task.id] &&
+          shouldShowUmbrellaAlert([task], todayWeather)
+        );
+      })
+    : [];
 
   const [umbrellaChecked, setUmbrellaChecked] = useState(false);
 
@@ -136,7 +149,11 @@ export default function Home({
       if (!alreadyPlayed) {
         const audio = new Audio("/sounds/ding-126626.mp3");
         audio.volume = 0.5;
-        audio.play().catch((e) => console.log("Audio blocked: " + e));
+        audio.play().catch((e) => {
+          if (import.meta.env.MODE === "development") {
+            console.error(e);
+          }
+        });
         localStorage.setItem(soundKey, "true");
       }
     }
@@ -145,13 +162,12 @@ export default function Home({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 pb-20">
       <div className="max-w-4xl mx-auto p-4 space-y-8 pt-12">
-        {/* ヘッダー */}
         <header className="text-center space-y-2">
           <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tight">
-            🏠 Welcome Home
+            {t("home.welcome")}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 font-medium">
-            {format(new Date(), "yyyy年 M月 d日 (E)", { locale: ja })}
+            {format(new Date(), "yyyy/M/d (E)", { locale: dateLocale })}
           </p>
         </header>
 
@@ -165,16 +181,16 @@ export default function Home({
               “
             </div>
             <h4 className="text-m font-black uppercase tracking-widest text-blue-600 mb-4 relative z-10">
-              今日の名言
+              {t("home.daily_quote")}
             </h4>
 
             {loadingQuote ? (
               <div className="h-32 w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center space-y-2 transition-all">
                 <div className="text-blue-600 dark:text-blue-400">
                   {" "}
-                  <Spinner size={10} />
+                  <Spinner size={8} />
                   <p className="text-slate-500 dark:text-slate-400 animate-pulse font-bold">
-                    読み込み中...
+                    {t("home.loading")}
                   </p>
                 </div>
               </div>
@@ -194,7 +210,7 @@ export default function Home({
               </div>
             ) : (
               <p className="text-slate-400 italic text-sm">
-                Quote unreachable 🙏
+                {t("home.quote_unreachable")}
               </p>
             )}
           </div>
@@ -202,16 +218,16 @@ export default function Home({
           {/* 天気情報セクション */}
           <div className={sectionClass}>
             <h4 className="text-m font-black uppercase tracking-widest text-blue-600 mb-4">
-              天気 @ {selectedCity}
+              {t("weather.weather_at", { city: t("cities." + selectedCity) })}
             </h4>
 
             {loadingWeather ? (
               <div className="bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center space-y-4">
                 <div className="text-blue-600 dark:text-blue-400">
                   {" "}
-                  <Spinner size={10} />
+                  <Spinner size={8} />
                   <p className="text-slate-500 dark:text-slate-400 animate-pulse font-bold">
-                    読み込み中...
+                    {t("home.loading")}
                   </p>
                 </div>
               </div>
@@ -227,13 +243,14 @@ export default function Home({
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-black text-slate-400 uppercase">
-                          {i === 0 ? "今日" : "明日"}・
+                          {i === 0 ? t("weather.today") : t("weather.tomorrow")}
+                          ・
                           {format(parseISO(d.date), "M/d (E)", {
-                            locale: ja,
+                            locale: dateLocale,
                           })}
                         </p>
                         <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
-                          {w.label}
+                          {t(w.label)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -259,7 +276,7 @@ export default function Home({
         <div className={sectionClass}>
           <div className="flex justify-between items-center mb-6">
             <h4 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
-              今日のご予定{" "}
+              {t("home.todays_schedule")}{" "}
               <span className="text-sm font-medium text-slate-400">
                 ({todaysTasks.length})
               </span>
@@ -268,27 +285,26 @@ export default function Home({
               onClick={() => navigate("/todo")}
               className=" bg-white dark:bg-slate-900 text-xs font-bold text-blue-600 hover:underline"
             >
-              全て見る →
+              {t("home.view_all")}
             </button>
           </div>
 
           {todaysTasks.length === 0 ? (
             <div className="text-center py-10 bg-slate-50 dark:bg-slate-800/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
-              <p className="text-slate-400 font-bold">
-                今日はタスクがありません 🎉
-              </p>
+              <p className="text-slate-400 font-bold">{t("home.no_tasks")}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {todaysTasks.map((t) => {
+              {todaysTasks.map((task) => {
                 // 期限切れかつ未完了かどうかの判定
-                const isOverdue = t.dueDate && t.dueDate < todayISO && !t.done;
+                const isOverdue =
+                  task.dueDate && task.dueDate < todayISO && !task.done;
 
                 return (
                   <div
-                    key={t.id}
+                    key={task.id}
                     className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${
-                      t.done
+                      task.done
                         ? "bg-slate-50/50 dark:bg-slate-800/20 border-slate-100 dark:border-slate-800 opacity-60"
                         : isOverdue
                           ? "bg-red-50/50 dark:bg-red-900/10 border-red-200 dark:border-red-900/50 shadow-sm" // Red tint for the whole card
@@ -297,24 +313,24 @@ export default function Home({
                   >
                     <input
                       type="checkbox"
-                      checked={t.done || false}
-                      onChange={() => toggleDone(t.id, t.done)}
+                      checked={task.done || false}
+                      onChange={() => toggleDone(task.id, task.done)}
                       className="w-5 h-5 rounded-lg border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer transition-all"
                     />
 
                     <span
                       className={`text-left text-sm font-bold truncate flex-1 cursor-default ${
-                        t.done
+                        task.done
                           ? "line-through text-slate-400"
                           : isOverdue
                             ? "text-red-600 dark:text-red-400"
                             : "text-slate-700 dark:text-slate-200"
                       }`}
                     >
-                      {t.title}
+                      {task.title}
                     </span>
 
-                    {t.dueDate && (
+                    {task.dueDate && (
                       <span
                         className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg shrink-0 transition-colors ${
                           isOverdue
@@ -322,7 +338,7 @@ export default function Home({
                             : "text-slate-400 bg-slate-100 dark:bg-slate-800"
                         }`}
                       >
-                        {t.dueDate.split("-").slice(1).join("/")}
+                        {task.dueDate.split("-").slice(1).join("/")}
                       </span>
                     )}
                   </div>
@@ -339,11 +355,7 @@ export default function Home({
               <div className="text-3xl animate-bounce">☔</div>
               <div className="flex-1">
                 <p className="text-sm font-bold text-slate-800 dark:text-white leading-relaxed">
-                  今日は「
-                  <span className="text-blue-600 dark:text-blue-400">
-                    {activeTask.title}
-                  </span>
-                  」のご予定がありますが、雨の予報です。傘を忘れずに！
+                  {t("home.umbrella_alert", { title: activeTask.title })}
                 </p>
 
                 <div className="mt-4 flex items-center justify-between gap-4">
@@ -354,7 +366,7 @@ export default function Home({
                       onChange={(e) => setUmbrellaChecked(e.target.checked)}
                       className="mr-2 w-5 h-5 rounded-lg border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
                     />
-                    わかりました
+                    {t("home.umbrella_confirm")}
                   </label>
 
                   <button
@@ -365,9 +377,7 @@ export default function Home({
                         // 次回表示用にローカルチェック状態をリセット
                         setUmbrellaChecked(false);
                       } else {
-                        alert(
-                          "内容を確認し、「わかりました」にチェックを入れてください ✅",
-                        );
+                        alert(t("home.umbrella_check_error"));
                       }
                     }}
                     className={`px-5 py-2 text-xs font-black rounded-xl transition-all ${
@@ -376,7 +386,7 @@ export default function Home({
                         : "bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800"
                     }`}
                   >
-                    閉じる
+                    {t("home.umbrella_close")}
                   </button>
                 </div>
               </div>

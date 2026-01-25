@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import opentype from "opentype.js";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { useTranslation } from "react-i18next";
 
 export default function TracingGame({ onFinish }) {
   const [quote, setQuote] = useState(null);
@@ -9,6 +10,7 @@ export default function TracingGame({ onFinish }) {
   const [maxScroll, setMaxScroll] = useState(0);
   const [viewIdx, setViewIdx] = useState(0);
   const [showFinishScreen, setShowFinishScreen] = useState(false);
+  const { t, i18n } = useTranslation();
 
   const particlesRef = useRef([]); // {x, y, opacity, size} を保持する
   const canvasRef = useRef(null);
@@ -37,7 +39,9 @@ export default function TracingGame({ onFinish }) {
           if (qSnap.exists()) setQuote(qSnap.data());
         }
       } catch (e) {
-        console.error(e);
+        if (import.meta.env.MODE === "development") {
+          console.error(e);
+        }
       }
     }
     fetchQuote();
@@ -67,7 +71,9 @@ export default function TracingGame({ onFinish }) {
     rhythmRef.current.loop = true;
 
     opentype.load("/fonts/KanjiStrokeOrders.ttf", (err, font) => {
-      if (err) return console.error("Font Error:", err);
+      if (err && import.meta.env.MODE === "development") {
+          console.error(err);
+        }
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -524,7 +530,7 @@ export default function TracingGame({ onFinish }) {
         )}
 
         {!isMobile && (
-          <div className="absolute top-1 left-8 text-left pointer-events-none opacity-40">
+          <div className="absolute top-1 left-2 text-left pointer-events-none opacity-40 max-w-[50vw]">
             <p className="text-slate-300 italic text-[16px] max-w-md leading-relaxed">
               {quote?.en} ({quote?.author})
             </p>
@@ -533,10 +539,24 @@ export default function TracingGame({ onFinish }) {
 
         {/* 中央の説明文（モバイルでは非表示）*/}
         {!isMobile && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none">
-            <span className="text-[18px] uppercase text-white/50 font-bold">
-              文字を描きながらリラックス
-            </span>
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 pointer-events-none">
+            {!isMobile && (
+              <div className="absolute top-1 left-1/2 -translate-x-1/2 pointer-events-none max-w-[50vw]">
+                <span
+                  className={`
+    text-[18px]
+    text-white/50
+    font-bold
+    whitespace-nowrap
+    text-center
+    leading-none
+    ${i18n.language === "ja" ? "" : "uppercase tracking-widest"}
+  `}
+                >
+                  {t("tracing_game.instruction")}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -545,7 +565,7 @@ export default function TracingGame({ onFinish }) {
           {/* 元に戻すボタン */}
           <button
             onClick={handleUndo}
-            title="ストロークを元に戻す"
+            title={t("tracing_game.undo")}
             className="p-2 rounded-full bg-white/5 hover:bg-white/10 hover:text-cyan-400 text-white/40 transition-all active:scale-90"
           >
             <svg
@@ -573,7 +593,7 @@ export default function TracingGame({ onFinish }) {
             }}
             className="text-[12px] md:text-[14px] uppercase tracking-widest bg-white/5 hover:bg-white/10 text-white/40 hover:text-red-400 transition-colors whitespace-nowrap"
           >
-            全てリセット
+            {t("tracing_game.reset_all")}
           </button>
         </div>
         {/* 終了ボタン：誤タップ防止のため左下 */}
@@ -582,7 +602,7 @@ export default function TracingGame({ onFinish }) {
             onClick={handleExit}
             className="absolute bottom-20 left-8 bg-white/5 hover:bg-white/10 px-6 py-2 rounded-full text-[10px] tracking-widest uppercase transition-all border border-white/5"
           >
-            終了
+            {t("tracing_game.exit")}
           </button>
         ) : (
           ""
@@ -600,12 +620,12 @@ export default function TracingGame({ onFinish }) {
       "
             >
               <div className="text-center space-y-6">
-                <h1 className="text-2xl font-bold">よくできました 🌙</h1>
+                <h1 className="text-2xl font-bold">
+                  {t("tracing_game.well_done")}
+                </h1>
 
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  今日もお疲れさまでした。
-                  <br />
-                  少しでも、心が落ち着く時間になっていたら嬉しいです。
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line">
+                  {t("tracing_game.well_done_msg")}
                 </p>
 
                 <button
@@ -617,7 +637,7 @@ export default function TracingGame({ onFinish }) {
             transition-all active:scale-95
           "
                 >
-                  閉じる
+                  {t("tracing_game.close")}
                 </button>
               </div>
             </div>

@@ -3,6 +3,8 @@ import WordGame from "../components/WordGame";
 import TracingGame from "../components/TracingGame";
 import { useLocation } from "react-router-dom"; // Add this import
 import { auth } from "../firebase/config";
+import { useTranslation } from "react-i18next";
+
 
 export default function FocusWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,9 +12,11 @@ export default function FocusWidget() {
   const [isBreak, setIsBreak] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameMode, setGameMode] = useState(null); // "words" | "drawing"
+  const { t } = useTranslation();
 
-  const FOCUS_TIME = 25 * 60;
-  const BREAK_TIME = 5 * 60;
+
+  const FOCUS_TIME = 0.5 * 60;
+  const BREAK_TIME = 2 * 60;
   const [seconds, setSeconds] = useState(FOCUS_TIME);
 
   const [showFinishedModal, setShowFinishedModal] = useState(false);
@@ -30,15 +34,12 @@ export default function FocusWidget() {
   const rainRef = useRef(
     new Audio("/sounds/pink-noise-ocean-waves-on-grainy-sand-195103.mp3"),
   );
-  rainRef.volume = 0.3;
 
   //lo-fi： https://pixabay.com/users/soundoffreedom-50460407/
   const lofiRef = useRef(new Audio("/sounds/undeground-lo-fi-400909.mp3"));
-  lofiRef.volume = 0.3;
 
   //アラートの音： https://pixabay.com/sound-effects/ding-126626/
   const overRef = useRef(new Audio("/sounds/ding-126626.mp3"));
-  overRef.volume = 0.3;
 
   //ループ再生とゲーム再生のロジック
   useEffect(() => {
@@ -60,12 +61,20 @@ export default function FocusWidget() {
     activeAudio.loop = true;
     activeAudio
       .play()
-      .catch((e) => console.log("User interaction required", e));
+      .catch((e) => {if (import.meta.env.MODE === "development") {
+          console.error(e);
+        }});
 
     return () => stopAll(); //モード切り替え時のクリーンアップ処理
   }, [musicMode, isActive, isBreak]);
 
   useEffect(() => {
+    if (!isActive) return;
+
+    if (seconds === 0) {
+      handlePhaseEnd();
+      return;
+    }
     let interval = null;
     if (isActive && seconds > 0) {
       interval = setInterval(() => setSeconds((s) => s - 1), 1000);
@@ -97,13 +106,9 @@ export default function FocusWidget() {
   };
   const toggleMusic = () => setMusicMode((prev) => (prev + 1) % 3);
   const handleCloseAll = () => {
-    // 1.ゲーム状態を先に強制停止する
     setGameStarted(false);
     setGameMode(null);
-    // 2. React がゲームの「アンマウント」を完了できるよう、ウィジェットを閉じる前に短い遅延を入れる
-    setTimeout(() => {
-      setIsOpen(false);
-    }, 50);
+    setIsOpen(false);
   };
 
   const formatTime = (s) => {
@@ -118,7 +123,6 @@ export default function FocusWidget() {
     return null;
   }
 
-  if (!isHome || !user) return null;
   return (
     <>
       {/* 1. 完了モーダル */}
@@ -127,10 +131,10 @@ export default function FocusWidget() {
           <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center animate-in zoom-in duration-300 max-w-xs border border-slate-200 dark:border-slate-800">
             <span className="text-6xl">✨</span>
             <h2 className="text-2xl font-black text-slate-800 dark:text-white mt-4">
-              お疲れ様です。
+              {t("focus.well_done")}
             </h2>
             <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm font-bold">
-              25分間しっかり集中できました。ご褒美の休憩時間です。
+              {t("focus.well_done_msg")}
             </p>
             <button
               onClick={() => {
@@ -141,7 +145,7 @@ export default function FocusWidget() {
               }}
               className="mt-6 w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-violet-200 dark:shadow-none active:scale-95"
             >
-              休憩スタート
+              {t("focus.start_break")}
             </button>
           </div>
         </div>
@@ -177,7 +181,7 @@ export default function FocusWidget() {
                 className={`flex justify-center items-center p-4 ${gameStarted ? "bg-slate-100 dark:bg-slate-800" : ""}`}
               >
                 <div className="text-xl font-black text-violet-500 dark:text-violet-400">
-                  残り休憩時間： {formatTime(seconds)}
+                  {t("focus.break_remaining")}： {formatTime(seconds)}
                 </div>
               </div>
 
@@ -194,7 +198,7 @@ export default function FocusWidget() {
                       }}
                       className="bg-purple-500 text-white px-8 py-4 rounded-2xl font-black text-lg hover:bg-purple-700 shadow-xl"
                     >
-                      タイピングゲーム
+                      {t("word_game.typing_game")}
                     </button>
 
                     <button
@@ -202,9 +206,9 @@ export default function FocusWidget() {
                         setGameMode("drawing");
                         setGameStarted(true);
                       }}
-                      className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-lg hover:bg-indigo-700 shadow-xl"
+                      className="bg-indigo-600 text-white mb-8 px-8 py-4 rounded-2xl font-black text-lg hover:bg-indigo-700 shadow-xl"
                     >
-                      お手本帳
+                      {t("tracing_game.title")}
                     </button>
                   </div>
                 </div>
@@ -243,11 +247,13 @@ export default function FocusWidget() {
                 <div className="flex flex-col items-center justify-between">
                   <span className="text-5xl mb-2">🍅</span>
                   <h3 className="font-black uppercase tracking-widest text-xs text-red-500 dark:text-red-400 text-center">
-                    集中タイム
+                    {t("focus.title")}
                   </h3>
                   {musicMode > 0 && (
                     <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-2 animate-pulse">
-                      {musicMode === 1 ? "♪ 雨のBGM..." : "♯ LO-FI BGM..."}
+                      {musicMode === 1
+                        ? t("focus.playing_rain")
+                        : t("focus.playing_lofi")}
                     </span>
                   )}
                 </div>
@@ -267,7 +273,7 @@ export default function FocusWidget() {
                 }
               `}
                   >
-                    {isActive ? "一時停止" : "スタート"}
+                    {isActive ? t("focus.pause") : t("focus.start")}
                   </button>
                 </div>
               </div>
@@ -287,10 +293,10 @@ export default function FocusWidget() {
         >
           <div className="bg-slate-900 dark:bg-slate-800 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
             <p className="font-black text-red-400 text-[10px] md:text-xs uppercase tracking-tighter mb-1">
-              🍅 ポモドーロ・テクニック
+              🍅 {t("focus.pomodoro_tech")}
             </p>
             <p className="text-[11px] md:text-[13px] leading-relaxed text-gray-300">
-              25分間集中し、5分間休憩します。このサイクルが脳をリフレッシュさせ、燃え尽きを防ぎます。
+              {t("focus.pomodoro_desc")}
             </p>
 
             {/* Tooltip Arrow (Moved to the right to stay over the button) */}

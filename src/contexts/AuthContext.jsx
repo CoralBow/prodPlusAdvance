@@ -33,7 +33,9 @@ export function AuthProvider({ children }) {
           setLoading(false);
         },
         (error) => {
-          console.error("エラー発生：", error);
+          if (import.meta.env.MODE === "development") {
+          console.error(error);
+        }
           setLoading(false);
         }
       );

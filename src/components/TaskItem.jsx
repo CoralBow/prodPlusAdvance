@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 // React.memo を使うことで、「タスク追加」入力中にリスト全体が再レンダリングされるのを防ぐ
 const TaskItem = React.memo(
@@ -18,16 +19,17 @@ const TaskItem = React.memo(
     onToggleDesc,
     onToggleChildren,
     childCount,
-    formatDateJP,
+
+    formatDate,
     taskRef,
   }) => {
-    
     const isItemOverdue =
       item.dueDate &&
       new Date(item.dueDate + "T00:00:00") < today &&
       !item.done;
     const itemShowDesc = uiState?.showDesc;
     const itemShowChild = uiState?.showChild;
+    const { t } = useTranslation("common");
 
     return (
       <li
@@ -42,6 +44,8 @@ const TaskItem = React.memo(
           <div className="space-y-3">
             <input
               type="text"
+              required
+              maxLength={1000}
               value={editState.title}
               onChange={(e) =>
                 setEditState({ ...editState, title: e.target.value })
@@ -50,11 +54,12 @@ const TaskItem = React.memo(
             />
             <textarea
               value={editState.description}
+              maxLength={1000}
               onChange={(e) =>
                 setEditState({ ...editState, description: e.target.value })
               }
               className="w-full p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-l dark:text-slate-300"
-              placeholder="内容詳細"
+              placeholder={t("todo.placeholder_desc")}
             />
             <input
               type="date"
@@ -70,13 +75,13 @@ const TaskItem = React.memo(
                 onClick={onSaveEdit}
                 className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-xs font-bold"
               >
-                保存
+                {t("todo.save")}
               </button>
               <button
                 onClick={onCancelEdit}
                 className="flex-1 bg-slate-200 dark:bg-slate-700 py-2 rounded-xl text-xs font-bold dark:text-slate-300"
               >
-                キャンセル
+                {t("todo.cancel")}
               </button>
             </div>
           </div>
@@ -114,7 +119,7 @@ const TaskItem = React.memo(
                 <p
                   className={`text-[12px] font-black mt-1 ${isItemOverdue ? "text-red-500" : "text-slate-400"}`}
                 >
-                  📅 {formatDateJP(item.dueDate)}
+                  📅 {formatDate(item.dueDate)}
                 </p>
               )}
               <div className="mt-2 flex gap-3">
@@ -123,7 +128,9 @@ const TaskItem = React.memo(
                     onClick={() => onToggleDesc(item.id)}
                     className="text-[12px] bg-gray-100 dark:bg-slate-800 font-black text-blue-500 rounded-full px-2 py-0.5"
                   >
-                    {itemShowDesc ? "－ 閉じる" : "＋ 詳細"}
+                    {itemShowDesc
+                      ? t("todo.details_hide")
+                      : t("todo.details_show")}
                   </button>
                 )}
                 {!isChild && childCount > 0 && (
@@ -132,8 +139,8 @@ const TaskItem = React.memo(
                     className="text-[12px] font-black text-blue-500 bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded-full"
                   >
                     {itemShowChild
-                      ? "－ 非表示"
-                      : `＋ 繰り返し (${childCount})`}
+                      ? t("todo.repeating_hide")
+                      : t("todo.repeating_show", { count: childCount })}
                   </button>
                 )}
               </div>

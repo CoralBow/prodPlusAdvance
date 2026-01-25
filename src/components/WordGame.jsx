@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
+
 
 const SOUNDS = {
   correct: "/sounds/correct-6033.mp3", //https://pixabay.com/sound-effects/correct-6033/
   error: "/sounds/error-04-199275.mp3", //https://pixabay.com/sound-effects/error-04-199275/
   victory: "/sounds/victory-chime-366449.mp3", //https://pixabay.com/sound-effects/victory-chime-366449/
-  bgMusic: "/sounds/video-game-music-loop-27629.mp3", //https://pixabay.com/sound-effects/musical-video-game-music-loop-27629/
+  bgMusic: "/sounds/video-game-music-loop-27629.m4a", //https://pixabay.com/sound-effects/musical-video-game-music-loop-27629/
 };
 
 export default function WordGame({ onFinish }) {
@@ -16,6 +18,8 @@ export default function WordGame({ onFinish }) {
   const [hasStartedFalling, setHasStartedFalling] = useState(false);
   const [combo, setCombo] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const { t } = useTranslation();
+
 
   const playerRef = useRef(null);
   const bgMusicRef = useRef(null);
@@ -48,7 +52,7 @@ export default function WordGame({ onFinish }) {
     if (gameState === "playing") {
       bgMusicRef.current
         ?.play()
-        .catch(() => console.log("音楽がブラウザ上にブロックされました"));
+        .catch(() => console.log("User interaction required"));
     } else if (gameState === "finished") {
       bgMusicRef.current?.pause();
       playSound("victory");
@@ -221,22 +225,20 @@ export default function WordGame({ onFinish }) {
         <div className="flex flex-col items-center justify-center h-full space-y-8 px-6 text-center animate-in fade-in duration-700">
           <div className="space-y-2">
             <h2 className="text-white font-black text-2xl md:text-5xl tracking-tighter italic">
-              ブレインブラスト
+              {t("word_game.title")}
             </h2>
             <div className="h-1 w-24 bg-blue-500 mx-auto rounded-full"></div>
           </div>
 
           <div className="bg-slate-900/50 p-6 rounded-3xl border border-white/10 backdrop-blur-md max-w-sm">
-            <p className="text-blue-400 font-bold mb-2 text-sm">【遊び方】</p>
+            <p className="text-blue-400 font-bold mb-2 text-sm">{t("word_game.instruction_title")}</p>
             <p className="text-slate-300 text-xs leading-relaxed">
-              英単語を3つ入力してください。AIが関連する単語を生成します。
+              {t("word_game.instruction_text")}
               <br />
               <span className="text-orange-400 font-bold text-xs">
-                ※システム上英語のみ入力可能です。
+                 {t("word_game.note")}
                 <br />
-                本機能は第三者提供の英語APIを使用しています。
-                <br />
-                APIの仕様により、意図しない関連語や不正確な結果が含まれる場合があります。
+                {t("word_game.instruction_disclaimer")}
               </span>
             </p>
           </div>
@@ -253,7 +255,7 @@ export default function WordGame({ onFinish }) {
             onClick={handleStart}
             className="group relative bg-blue-600 hover:bg-blue-500 text-white px-16 py-4 rounded-full font-black text-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(37,99,235,0.4)]"
           >
-            ゲーム開始
+            {t("word_game.start_game")}
           </button>
         </div>
       )}
@@ -263,7 +265,7 @@ export default function WordGame({ onFinish }) {
         <div className="flex flex-col items-center justify-center h-full text-white">
           <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
           <p className="mt-6 font-bold tracking-widest text-slate-400">
-            単語を生成中...
+            {t("word_game.loading")}
           </p>
         </div>
       )}
@@ -274,7 +276,7 @@ export default function WordGame({ onFinish }) {
           <div className="px-8 pt-12 pb-6 flex justify-between items-center bg-gradient-to-b from-slate-900 via-slate-900 to-transparent z-20">
             <div>
               <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">
-                スコア
+                {t("word_game.score")}
               </p>
               <p className="text-4xl font-black tabular-nums tracking-tighter">
                 {score}
@@ -286,7 +288,7 @@ export default function WordGame({ onFinish }) {
                   {combo}
                 </span>
                 <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
-                  コンボ
+                  {t("word_game.combo")}
                 </span>
               </div>
             )}
@@ -324,13 +326,13 @@ export default function WordGame({ onFinish }) {
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="TYPE!"
+                placeholder={t("word_game.type_here")}
                 autoComplete="off"
                 style={{ fontSize: "16px" }} // モバイルのズーム防止
               />
               {isMobile && (
                 <p className="text-[8px] text-center mt-2 text-slate-500 font-bold">
-                  画面上の単語をタイプしてください
+                  {t("word_game.type_here")}
                 </p>
               )}
             </div>
@@ -342,18 +344,18 @@ export default function WordGame({ onFinish }) {
       {gameState === "finished" && (
         <div className="flex flex-col items-center justify-center h-full text-white bg-blue-900/20 backdrop-blur-xl animate-in zoom-in duration-500">
           <div className="bg-slate-900 p-12 rounded-[3rem] border border-white/10 shadow-2xl text-center space-y-6">
-            <h2 className="text-2xl font-bold text-blue-400">RESULT</h2>
+            <h2 className="text-2xl font-bold text-blue-400">{t("word_game.result")}</h2>
             <p className="text-7xl font-black text-white tracking-tighter">
               {score}
             </p>
             <p className="text-slate-400 font-medium">
-              スコア獲得！お疲れ様でした。
+              {t("word_game.score_get")}
             </p>
             <button
               onClick={onFinish}
               className="w-full bg-white text-slate-950 py-5 rounded-2xl font-black text-xl hover:bg-blue-400 transition-colors"
             >
-              休憩に戻る
+              {t("word_game.back_to_break")}
             </button>
           </div>
         </div>

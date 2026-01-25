@@ -16,6 +16,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import cities from "./data/cities";
 import mapWeatherCode from "./data/weather";
+import cleanupOldWeatherCache from "./utils/cleanupOldWeatherCache";
 import { useAuth } from "./contexts/AuthContext";
 import {
   collection,
@@ -24,7 +25,9 @@ import {
   onSnapshot,
   orderBy,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { db } from "./firebase/config";
+import { useTranslation } from "react-i18next";
+import ScrollToTop from "./components/ScrollToTop";
 
 function App() {
   const [tasks, setTasks] = useState([]);
@@ -52,9 +55,9 @@ function App() {
   }, [user]);
 
   const [selectedCity, setSelectedCity] = useState(() => {
-    return localStorage.getItem("selectedCity") || cities[0].name; // デフォルト地域（東京都）
+    return localStorage.getItem("selectedCity") || cities[0].name;
   });
-
+  const { t } = useTranslation();
   const [weatherData, setWeatherData] = useState(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [errorWeather, setErrorWeather] = useState(null);
@@ -63,15 +66,19 @@ function App() {
 
   const cityObj = useMemo(() => {
     return cities.find((c) => c.name === selectedCity) || cities[0];
-  }, [selectedCity]); // ローカルストレージから地域を復元（なければデフォルト）
+  }, [selectedCity]);
 
   // 変更がある場合に新地域保存
   useEffect(() => {
     localStorage.setItem("selectedCity", selectedCity);
   }, [selectedCity]);
 
+  
   // 天気データのキャッシュ有効期限（3時間）
   const CACHE_EXPIRATION_MS = 3 * 60 * 60 * 1000;
+  useEffect(() => {
+    cleanupOldWeatherCache(CACHE_EXPIRATION_MS);
+  }, []);
 
   useEffect(() => {
     if (!cityObj) return;
@@ -85,17 +92,16 @@ function App() {
         const data = JSON.parse(cachedData);
 
         if (Date.now() < data.timestamp + CACHE_EXPIRATION_MS) {
-    
           setWeatherData(data.weather);
           setLoadingWeather(false);
           setErrorWeather(null);
-          console.log("Weather data loaded from cache.");
           return; // キャッシュが有効期限内なら API 呼び出しをスキップ
         }
         // キャッシュ期限切れのため再取得
-        console.log("Cached weather data expired. Fetching new data...");
       } catch (e) {
-        console.log("Error: " + e);
+        if (import.meta.env.MODE === "development") {
+          console.error(e);
+        }
         // 壊れたキャッシュは無視して再取得
         localStorage.removeItem(cacheKey);
       }
@@ -110,7 +116,7 @@ function App() {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${cityObj.lat}&longitude=${cityObj.lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=Asia%2FTokyo&forecast_days=14`;
         const res = await fetch(url, { signal: controller.signal });
 
-        if (!res.ok) throw new Error("天気情報の取得に失敗しました");
+        if (!res.ok) throw new Error(t("weather.no_data"));
 
         const data = await res.json();
         const d = data.daily;
@@ -122,13 +128,11 @@ function App() {
           code: d.weathercode[i],
         }));
 
-   
         const cacheValue = {
           timestamp: Date.now(),
           weather: normalized,
         };
         localStorage.setItem(cacheKey, JSON.stringify(cacheValue));
-
 
         setWeatherData(normalized);
       } catch (err) {
@@ -147,6 +151,7 @@ function App() {
       <Header />
 
       <main className="flex-1">
+        <ScrollToTop />
         <Routes>
           <Route
             path="/"
@@ -235,8 +240,12 @@ function App() {
           />
         </Routes>
       </main>
-      <FocusWidget />
-      <Footer />
+      {user && user.emailVerified && (
+        <>
+          <FocusWidget />
+          <Footer />
+        </>
+      )}
       <Toaster />
     </div>
   );

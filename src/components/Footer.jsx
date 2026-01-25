@@ -1,9 +1,11 @@
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 function Footer() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   if (!user) return null;
 
   const defaultAvatar = "/pictures/default.png";
@@ -13,7 +15,7 @@ function Footer() {
       <div className="max-w-screen-lg mx-auto px-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 cursor-pointer"
             onClick={() => (user && user.emailVerified ? navigate(`/settings`) : "")}
           >
             <div className="relative">
@@ -26,16 +28,16 @@ function Footer() {
             </div>
             <div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Signed in as
+                {t('footer.signed_in_as')}
               </p>
               <p className="text-sm font-black text-slate-800 dark:text-slate-200">
-                {profile?.displayName || "メンバー"}
+                {profile?.displayName || t('footer.member')}
               </p>
             </div>
           </div>
 
           <div className="text-sm text-slate-500 dark:text-slate-400 italic">
-            Let's make this day awesome <span className="not-italic">🚀</span>
+            {t('footer.awesome_day')} <span className="not-italic">🚀</span>
           </div>
         </div>
       </div>

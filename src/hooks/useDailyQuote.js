@@ -8,13 +8,11 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
-import { format } from "date-fns";
 import { useEffect, useState } from "react";
 
 export function useDailyQuote(todayISO) {
   const [quote, setQuote] = useState(() => {
-    const localToday = format(new Date(), "yyyy-MM-dd"); // 初回チェック用にローカル日付を生成
-    const cached = localStorage.getItem(`quote_${localToday}`);
+    const cached = todayISO ? localStorage.getItem(`quote_${todayISO}`) : null;
     return cached ? JSON.parse(cached) : null;
   });
 
@@ -109,6 +107,10 @@ export function useDailyQuote(todayISO) {
       // 1日1回（または初回ロード時）クリーンアップを実行
       cleanOldCache();
       try {
+        if (quote) {
+          setLoadingQuote(false);
+          return;
+        }
         setLoadingQuote(true);
 
         const dailyRef = doc(db, "meta", "daily");
@@ -154,7 +156,9 @@ export function useDailyQuote(todayISO) {
           }
         }
       } catch (e) {
-        console.error("エラー発生：", e);
+        if (import.meta.env.MODE === "development") {
+          console.error(e);
+        }
 
         const lastResort = localStorage.getItem(`quote_${todayISO}`);
         if (lastResort) setQuote(JSON.parse(lastResort));

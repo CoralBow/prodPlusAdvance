@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App.jsx";
 import { AuthProvider } from "./contexts/AuthContext.jsx";
 import { ThemeProvider } from "./contexts/ThemeContext.jsx";
+import "../i18n.js";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <StrictMode>
@@ -15,5 +16,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
-  </StrictMode>
+  </StrictMode>,
 );

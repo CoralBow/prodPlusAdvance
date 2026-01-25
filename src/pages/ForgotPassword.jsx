@@ -4,7 +4,10 @@ import { onAuthStateChanged, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase/config";
 import Spinner from "../components/Spinner";
 
+import { useTranslation } from "react-i18next";
+
 export default function ForgotPassword() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const timerRef = useRef(null);
@@ -46,7 +49,7 @@ export default function ForgotPassword() {
 
     try {
       await sendPasswordResetEmail(auth, email);
-      setMessage("パスワードリセットメールを送信しました。");
+      setMessage(t("auth.email_sent_msg"));
       setCooldown(30);
 
       timerRef.current = setInterval(() => {
@@ -60,25 +63,27 @@ export default function ForgotPassword() {
         });
       }, 1000);
     } catch (err) {
-      setError("リクエストが多すぎます。しばらくしてからお試しください。");
-      console.log("エラー発生：" + err);
+      setError(t("auth.error_too_many"));
+      if (import.meta.env.MODE === "development") {
+          console.error(err);
+        }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex justify-center items-center h-[calc(100vh-72px)] bg-slate-50 dark:bg-slate-950 p-5 transition-colors overflow-hidden">
+    <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 p-5">
       <div className="bg-white dark:bg-slate-900 shadow-xl rounded-2xl p-8 max-w-md w-full text-center border border-transparent dark:border-slate-800 scale-95 sm:scale-100">
         <h1 className="text-2xl font-black mb-6 text-slate-800 dark:text-white">
-          パスワードリセット
+          {t("auth.forgot_password_title")}
         </h1>
         <form onSubmit={handleReset} className="flex flex-col gap-4">
           <input
             type="email"
             required
             value={email}
-            placeholder="メールアドレス"
+            placeholder={t("auth.email")}
             className="border dark:border-slate-700 p-3 rounded-xl focus:ring focus:ring-blue-300 outline-none bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -94,20 +99,20 @@ export default function ForgotPassword() {
           >
             {loading ? (
               <div className="flex items-center gap-2">
-                <span>送信中…</span>
+                <span>{t("auth.verify_resending")}</span>
                 <Spinner />
               </div>
             ) : cooldown > 0 ? (
-              `${cooldown}秒お待ちください`
+              t("auth.wait_seconds", { count: cooldown })
             ) : message ? (
-              "パスワードリセットURLを再送信"
+              t("auth.resend_reset_link")
             ) : (
-              "パスワードリセットURLを送信"
+              t("auth.send_reset_link")
             )}
           </button>
           {!validEmail && email.length > 0 && (
             <p className="text-red-500 text-sm font-bold">
-              メールアドレスの形式が正しくありません。
+              {t("auth.error_invalid_email")}
             </p>
           )}
 
