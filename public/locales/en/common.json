@@ -1,4 +1,8 @@
 {
+    "date": {
+    "long": "/MMMM d yyyy (E)",
+    "short": "M/d (E)"
+  },
   "navigation": {
     "home": "Home",
     "todo": "Todo",
@@ -154,7 +158,7 @@
     "delete_repeat_tasks": "Delete all repeating tasks",
     "delete": "Delete",
     "format_month": "MMMM yyyy",
-    "format_day": "MMM d (EEEE)"
+    "format_day": "MMM d (E)"
   },
   "todo": {
     "title": "To-Do List",
@@ -184,6 +188,7 @@
   "weather": {
     "title": "Weather Forecast",
     "weather_at": "Weather ＠ {{city}}",
+    "weather_short": "Weather ＠",
     "today": "Today",
     "tomorrow": "Tomorrow",
     "two_weeks_forecast": "14-Day Forecast",
@@ -230,7 +235,16 @@
     "izumo": "Izumo",
     "hiroshima": "Hiroshima",
     "fukuoka": "Fukuoka",
-    "kochi": "Kochi"
+    "kochi": "Kochi",
+    "london": "London",
+    "new_york": "New York",
+    "los_angeles": "Los Angeles",
+    "madrid": "Madrid",
+    "paris": "Paris",
+    "moscow": "Moscow",
+    "vladivostok": "Vladivostok",
+    "beijing": "Beijing",
+    "seoul": "Seoul"
   },
   "home": {
     "welcome": "🏠 Welcome Home",

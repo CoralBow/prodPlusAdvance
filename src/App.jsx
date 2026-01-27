@@ -164,6 +164,7 @@ function App() {
                   tasks={tasks}
                   cities={cities}
                   selectedCity={selectedCity}
+                  setSelectedCity={setSelectedCity}
                   umbrellaAlertActive={umbrellaAlertActive}
                   setUmbrellaAlertActive={setUmbrellaAlertActive}
                   umbrellaDismissed={umbrellaDismissed}

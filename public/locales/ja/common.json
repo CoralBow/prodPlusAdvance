@@ -1,4 +1,8 @@
 {
+  "date": {
+    "long": "yyyy年M月d日 (E)",
+    "short": "M月d日 (E)"
+  },
   "navigation": {
     "home": "ホーム",
     "todo": "TODO",
@@ -49,7 +53,7 @@
     "instruction": "文字を描きながらリラックス",
     "undo": "ストロークを元に戻す"
   },
- 
+
   "auth": {
     "loading": "読み込み中...",
     "login": "ログイン",
@@ -123,8 +127,8 @@
     "deleting": "削除中...",
     "success_updated": "プロフィールを更新しました！🎉",
     "error_save": "保存に失敗しました。",
-    "error_name_too_long" : "お名前が長すぎます。 \n25文字以下のお名前をご入力お願いします。",
-    "error_quote_too_long" : "引用が長すぎます。 \n250文字以下のテキストをご入力お願いします。",
+    "error_name_too_long": "お名前が長すぎます。 \n25文字以下のお名前をご入力お願いします。",
+    "error_quote_too_long": "引用が長すぎます。 \n250文字以下のテキストをご入力お願いします。",
     "error_password_empty": "パスワードを入力してください",
     "success_password_updated": "パスワードを更新しました",
     "error_wrong_password": "現在のパスワードが正しくありません。",
@@ -134,7 +138,7 @@
     "error_delete_wrong_password": "パスワードが正しくありません。",
     "loading": "読み込み中...",
     "error_delete_failed": "エラーが発生しました。もう一度お試しください。",
-    "generate" : "アバター生成"
+    "generate": "アバター生成"
   },
   "calendar": {
     "title": "📅 カレンダー",
@@ -184,6 +188,7 @@
   "weather": {
     "title": "天気予報",
     "weather_at": "天気 ＠ {{city}}",
+    "weather_short": "天気 ＠",
     "today": "今日",
     "tomorrow": "明日",
     "two_weeks_forecast": "二週間の天気予報",
@@ -230,7 +235,16 @@
     "izumo": "出雲市",
     "hiroshima": "広島市",
     "fukuoka": "福岡市",
-    "kochi": "高知市"
+    "kochi": "高知市",
+    "london": "ロンドン市",
+    "new_york": "ニューヨーク市",
+    "los_angeles": "ロスアンゼルス市",
+    "madrid": "マドリード市",
+    "paris": "パリ市",
+    "moscow": "モスクワ市",
+    "vladivostok": "ウラジオストク市",
+    "beijing": "北京市",
+    "seoul": "ソウル市"
   },
   "home": {
     "welcome": "🏠 Welcome Home",

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { format, parseISO } from "date-fns";
 import { ja, ru, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
@@ -14,8 +14,10 @@ const sectionClass =
   "p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all";
 
 export default function Home({
+  cities,
   tasks,
   selectedCity,
+  setSelectedCity,
   mapWeatherCode,
   weatherData,
   loadingWeather,
@@ -96,6 +98,10 @@ export default function Home({
   // -------------------------
   const todayWeather = weatherData?.[0];
   const tomorrowWeather = weatherData?.[1];
+  const handleCityChange = useCallback(
+    (e) => setSelectedCity(e.target.value),
+    [setSelectedCity],
+  );
 
   // -------------------------
   // 傘アラートを非表示にした履歴マップ
@@ -167,7 +173,7 @@ export default function Home({
             {t("home.welcome")}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 font-medium">
-            {format(new Date(), "yyyy/M/d (E)", { locale: dateLocale })}
+            {format(new Date(), t("date.long"), { locale: dateLocale })}
           </p>
         </header>
 
@@ -217,9 +223,24 @@ export default function Home({
 
           {/* 天気情報セクション */}
           <div className={sectionClass}>
-            <h4 className="text-m font-black uppercase tracking-widest text-blue-600 mb-4">
-              {t("weather.weather_at", { city: t("cities." + selectedCity) })}
-            </h4>
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-6">
+              <h4 className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                {t("weather.weather_short", {
+                  city: t(`cities.${selectedCity}`),
+                })}
+              </h4>
+              <select
+                value={selectedCity}
+                onChange={handleCityChange}
+                className="appearance-none w-full sm:w-auto p-3 pr-10 border border-slate-200 rounded-xl dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:border-blue-500 focus:outline-none ring-0 focus:ring-0 transition-all cursor-pointer bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%2394a3b8%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M8%201a.5.5%200%200%201%20.5.5v11.793l3.146-3.147a.5.5%200%200%201%20.708.708l-4%204a.5.5%200%200%201-.708%200l-4-4a.5.5%200%200%201%20.708-.708L7.5%2013.293V1.5A.5.5%200%200%201%208%201%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem_1rem] bg-[right_0.75rem_center] bg-no-repeat"
+              >
+                {cities.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {t(`cities.${c.name}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {loadingWeather ? (
               <div className="bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center space-y-4">
@@ -245,7 +266,7 @@ export default function Home({
                         <p className="text-[12px] font-black text-slate-400 uppercase">
                           {i === 0 ? t("weather.today") : t("weather.tomorrow")}
                           ・
-                          {format(parseISO(d.date), "M/d (E)", {
+                          {format(parseISO(d.date), t("date.short"), {
                             locale: dateLocale,
                           })}
                         </p>

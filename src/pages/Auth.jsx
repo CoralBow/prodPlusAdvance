@@ -35,7 +35,6 @@ export default function Auth() {
   const canSubmit = isEmailValid && isPasswordValid && !loading;
   const pollCountRef = useRef(0);
 
-
   // 1. 認証状態リスナー
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -60,7 +59,6 @@ export default function Auth() {
   useEffect(() => {
     let poller;
     pollCountRef.current = 0;
-
 
     if (mode === "verify" && user && !user.emailVerified) {
       poller = setInterval(async () => {
@@ -102,7 +100,6 @@ export default function Auth() {
     };
   }, [mode]);
 
-
   function mapFirebaseError(code) {
     switch (code) {
       case "auth/invalid-credential":
@@ -138,7 +135,7 @@ export default function Auth() {
           favoriteQuote: "",
           createdAt: serverTimestamp(),
         });
-        auth.languageCode = i18n.language;;
+        auth.languageCode = i18n.language;
         await sendEmailVerification(res.user);
         setMode("verify");
         toast.success(t("auth.toast_verify_sent"));
@@ -198,14 +195,13 @@ export default function Auth() {
     } catch (e) {
       toast.error(t("auth.toast_refresh_failed"));
       if (import.meta.env.MODE === "development") {
-          console.error(e);
-        }
+        console.error(e);
+      }
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 p-5">
-
       <div className="bg-white dark:bg-slate-900 shadow-xl rounded-3xl p-8 max-w-md w-full border border-slate-200 dark:border-slate-800 transition-all min-h-[400px] flex flex-col justify-center">
         {/* グローバルローディング状態 */}
         {loading ? (
@@ -287,7 +283,11 @@ export default function Auth() {
                   setError("");
                   setMode("login");
                 }}
-                className={`flex-1 py-2 rounded-xl bg-white dark:bg-slate-700  font-bold transition-all ${mode === "login" ? "shadow-sm text-blue-600 dark:text-blue-500" : "bg-gray-300 dark:bg-slate-900 text-slate-500"}`}
+                className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                  mode === "login"
+                    ? "bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-500"
+                    : "bg-slate-100 dark:bg-slate-900 text-slate-500"
+                }`}
               >
                 {t("auth.login")}
               </button>
@@ -296,7 +296,11 @@ export default function Auth() {
                   setError("");
                   setMode("register");
                 }}
-                className={`flex-1 py-2 rounded-xl bg-white dark:bg-slate-700 font-bold transition-all ${mode === "register" ? "shadow-sm text-blue-600 dark:text-blue-500" : "bg-gray-300 dark:bg-slate-900 text-slate-500"}`}
+                className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                  mode === "register"
+                    ? "bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-500"
+                    : "bg-slate-100 dark:bg-slate-900 text-slate-500"
+                }`}
               >
                 {t("auth.register")}
               </button>
