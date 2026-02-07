@@ -31,7 +31,9 @@ import ScrollToTop from "./components/ScrollToTop";
 
 function App() {
   const [tasks, setTasks] = useState([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useAuth();
+
   useEffect(() => {
     if (!user) return;
 
@@ -73,7 +75,6 @@ function App() {
     localStorage.setItem("selectedCity", selectedCity);
   }, [selectedCity]);
 
-  
   // 天気データのキャッシュ有効期限（3時間）
   const CACHE_EXPIRATION_MS = 3 * 60 * 60 * 1000;
   useEffect(() => {
@@ -100,7 +101,9 @@ function App() {
         // キャッシュ期限切れのため再取得
       } catch (e) {
         if (import.meta.env.MODE === "development") {
-          console.error(e);
+          if (import.meta.env.MODE === "development") {
+            console.warn(e);
+          }
         }
         // 壊れたキャッシュは無視して再取得
         localStorage.removeItem(cacheKey);
@@ -148,7 +151,10 @@ function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-black">
-      <Header />
+      <Header
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />
 
       <main className="flex-1">
         <ScrollToTop />
@@ -243,11 +249,15 @@ function App() {
       </main>
       {user && user.emailVerified && (
         <>
-          <FocusWidget />
           <Footer />
         </>
       )}
-      <Toaster />
+      <FocusWidget disabled={mobileMenuOpen} />
+      <Toaster
+        containerStyle={{
+          zIndex: 10,
+        }}
+      />
     </div>
   );
 }

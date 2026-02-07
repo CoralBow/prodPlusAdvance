@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Remove the hardcoded #242424 and #ffffff from :root */
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -43,6 +42,38 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   top: 0;
   width: auto;
 }
+
+input[type="checkbox"] {
+  @apply appearance-none
+    bg-white
+    border border-slate-400
+    rounded-sm
+
+    checked:bg-white
+    checked:border-slate-600
+
+    checked:after:content-['✔']
+    checked:after:block
+    checked:after:text-black
+    checked:after:text-sm
+    checked:after:leading-none
+    checked:after:text-center
+cursor-pointer
+rounded-sm
+    focus:outline-none
+    focus:ring-0
+    active:ring-0
+    transition;
+}
+
+input[type="checkbox"]:checked::after {
+  content: "✔";
+  @apply flex items-center justify-center;
+}
+.task-checkbox {
+  @apply w-5 h-5 md:w-4 md:h-4 mt-2 rounded-lg;
+}
+
 
 h1 {
   font-size: 3.2em;

@@ -11,48 +11,51 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-
   useEffect(() => {
-  let unsubscribeProfile = null;
+    let unsubscribeProfile = null;
 
-  const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-    setUser(currentUser);
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
 
-    if (unsubscribeProfile) {
-      unsubscribeProfile();
-      unsubscribeProfile = null;
-    }
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
 
-    if (currentUser) {
-      const docRef = doc(db, "users", currentUser.uid);
+      if (currentUser) {
+        const docRef = doc(db, "users", currentUser.uid);
 
-      unsubscribeProfile = onSnapshot(
-        docRef,
-        (docSnap) => {
-          setProfile(docSnap.exists() ? docSnap.data() : null);
-          setLoading(false);
-        },
-        (error) => {
-          if (import.meta.env.MODE === "development") {
-          console.error(error);
-        }
-          setLoading(false);
-        }
-      );
-    } else {
-      setProfile(null);
-      setLoading(false);
-    }
-  });
+        unsubscribeProfile = onSnapshot(
+          docRef,
+          (docSnap) => {
+            setProfile(docSnap.exists() ? docSnap.data() : null);
+            setLoading(false);
+          },
+          (error) => {
+            if (import.meta.env.MODE === "development") {
+              console.error(error);
+            }
+            setLoading(false);
+          },
+        );
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    });
 
-  return () => {
-    if (unsubscribeProfile) unsubscribeProfile();
-    unsubscribeAuth();
-  };
-}, []);
+    return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
+      unsubscribeAuth();
+    };
+  }, []);
 
-
-  if (loading) return <Spinner />;
+  if (loading)
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Spinner size={40} />
+      </div>
+    );
 
   const value = { user, profile };
 

@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import opentype from "opentype.js";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, query, getDocs, limit } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { useTranslation } from "react-i18next";
 
@@ -9,10 +9,19 @@ export default function TracingGame({ onFinish }) {
   const [pathsReady, setPathsReady] = useState(false);
   const [maxScroll, setMaxScroll] = useState(0);
   const [viewIdx, setViewIdx] = useState(0);
-  const [showFinishScreen, setShowFinishScreen] = useState(false);
+  const [showFinishedModal, setShowFinishedModal] = useState(false);
+
   const { t, i18n } = useTranslation();
 
-  const particlesRef = useRef([]); // {x, y, opacity, size} を保持する
+  const particlesRef = useRef([]); // { x, y, vx, vy, life, size }
+
+  const dotRef = useRef({
+    x: 0,
+    y: 0,
+    baseRadius: 6,
+    pulse: 0,
+  });
+
   const canvasRef = useRef(null);
   const allPathsRef = useRef([]);
   const activePointRef = useRef({ t: 0, segmentIdx: 0 });
@@ -20,30 +29,78 @@ export default function TracingGame({ onFinish }) {
   const tracingRef = useRef(false);
   const rhythmRef = useRef(null);
   const scrollRef = useRef(0);
-  const [isMobile] = useState(window.innerWidth < 768);
+
   // 2本指スクロール用に、最後のY座標を追跡する ref
   const lastTouchY = useRef(0);
 
   const DOT_SPEED = 0.0018;
   const charPositionsRef = useRef([]);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     async function fetchQuote() {
-      try {
-        const todayISO = new Date().toLocaleDateString("sv-SE");
-        const dailySnap = await getDoc(doc(db, "meta", "daily"));
-        if (dailySnap.exists() && dailySnap.data().date === todayISO) {
-          const qSnap = await getDoc(
-            doc(db, "quotes", dailySnap.data().quoteId),
-          );
-          if (qSnap.exists()) setQuote(qSnap.data());
-        }
-      } catch (e) {
-        if (import.meta.env.MODE === "development") {
-          console.error(e);
+      const CACHE_KEY = "tracing_quotes_pool";
+      const CACHED_DATA = localStorage.getItem(CACHE_KEY);
+      const now = Date.now();
+      const ONE_DAY = 24 * 60 * 60 * 1000;
+
+      // --- キャッシュに保存有無確認 ---
+      if (CACHED_DATA) {
+        try {
+          const { quotes, timestamp } = JSON.parse(CACHED_DATA);
+          if (now - timestamp < ONE_DAY && quotes.length > 0) {
+            const randomQuote =
+              quotes[Math.floor(Math.random() * quotes.length)];
+            setQuote(randomQuote);
+            return; // Exit early, we're done!
+          }
+        } catch (e) {
+          if (import.meta.env.MODE === "development") console.error(e);
         }
       }
+
+      // --- キャッシュない/期限切れの場合DBから受け取る ---
+      try {
+        const quotesRef = collection(db, "quotes");
+        const q = query(quotesRef, limit(15));
+        const querySnapshot = await getDocs(q);
+
+        const pool = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        if (pool.length > 0) {
+          // キャッシュに保存する
+          localStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({
+              quotes: pool,
+              timestamp: now,
+            }),
+          );
+          // ランダムな名言を選択する
+          setQuote(pool[Math.floor(Math.random() * pool.length)]);
+        } else {
+          throw new Error("DBに名言がありませんでした");
+        }
+      } catch (e) {
+        if (import.meta.env.MODE === "development") console.error(e);
+        // 失敗の際、以下を表示させる
+        setQuote({
+          jp: "継続は力なり",
+          en: "Continuity is power.",
+          author: "Proverb",
+        });
+      }
     }
+
     fetchQuote();
   }, []);
 
@@ -52,7 +109,6 @@ export default function TracingGame({ onFinish }) {
       // 外部から終了させた場合実行
       if (rhythmRef.current) {
         rhythmRef.current.pause();
-        rhythmRef.current.currentTime = 0;
         rhythmRef.current = null;
       }
 
@@ -65,15 +121,19 @@ export default function TracingGame({ onFinish }) {
 
   useEffect(() => {
     if (!quote?.jp) return;
+
     //ベル音： https://pixabay.com/sound-effects/chimes-and-water-451427/
     rhythmRef.current = new Audio("/sounds/chimes-and-water-451427.mp3");
     rhythmRef.current.volume = 0.1;
     rhythmRef.current.loop = true;
 
+    let cancelled = false;
+
     opentype.load("/fonts/KanjiStrokeOrders.ttf", (err, font) => {
       if (err && import.meta.env.MODE === "development") {
-          console.error(err);
-        }
+        console.error(err);
+      }
+      if (cancelled || err) return;
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -163,13 +223,36 @@ export default function TracingGame({ onFinish }) {
       setPathsReady(true);
     });
     return () => {
+      cancelled = true;
       if (rhythmRef.current) {
         rhythmRef.current.pause();
-        rhythmRef.current.currentTime = 0; // Resets the track to the beginning
-        rhythmRef.current = null; // Clears the reference
       }
     };
-  }, [quote, isMobile]);
+  }, [quote, isMobile]); //push...は安定したものであり注意を無視する
+
+  useEffect(() => {
+    if (!canvasRef.current || !pathsReady) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+  }, [pathsReady, isMobile]);
+
+  const drawPath = (ctx, path) => {
+    ctx.beginPath();
+    path.forEach((p, i) => {
+      if (p.gap) {
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+      } else {
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+      }
+    });
+    ctx.stroke();
+  };
 
   // コードを整理するためのヘルパー
   const pushPathCommands = (path, generatedPaths) => {
@@ -186,6 +269,8 @@ export default function TracingGame({ onFinish }) {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+        return;
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         e.preventDefault();
         handleUndo();
@@ -206,10 +291,52 @@ export default function TracingGame({ onFinish }) {
   }
 
   const handleWheel = (e) => {
+    e.preventDefault();
     scrollRef.current = Math.min(
       maxScroll,
       Math.max(0, scrollRef.current + e.deltaY),
     );
+  };
+  const renderMeditativeElements = (ctx) => {
+    const dot = dotRef.current;
+    if (!dot) return;
+
+    // ---動いているドットの設定 ---
+    dot.pulse += 0.02;
+    const pulseRadius = dot.baseRadius + Math.sin(dot.pulse) * 1.5;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    ctx.beginPath();
+    ctx.arc(dot.x, dot.y, pulseRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = "#22d3ee";
+    ctx.fill();
+
+    ctx.restore();
+
+    // --- ドットから飛んでいるスパーク設定 ---
+    const particles = particlesRef.current;
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      // ---スパークルの更新と描画 ---
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.015;
+
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${p.life * 0.6})`;
+      ctx.fill();
+    }
   };
 
   useEffect(() => {
@@ -219,11 +346,7 @@ export default function TracingGame({ onFinish }) {
 
     let frameId;
     const render = () => {
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-
-      ctx.fillStyle = "#1e293b";
+      ctx.fillStyle = "#0f172a";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.save();
@@ -260,33 +383,13 @@ export default function TracingGame({ onFinish }) {
         ctx.shadowColor = "#22d3ee";
         ctx.strokeStyle = "rgba(34, 211, 238, 0.3)";
         ctx.lineWidth = 10;
-        ctx.beginPath();
-        userPathRef.current.forEach((p, i) => {
-          if (p.gap) {
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-          } else {
-            i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
-          }
-        });
-        ctx.stroke();
+        drawPath(ctx, userPathRef.current);
 
         // コア描画（内側の明るい線）
         ctx.shadowBlur = 0;
         ctx.strokeStyle = "#ffffff"; // 明るい白色のコア
         ctx.lineWidth = 3;
-        ctx.beginPath();
-        userPathRef.current.forEach((p, i) => {
-          if (p.gap) {
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-          } else {
-            i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
-          }
-        });
-        ctx.stroke();
+        drawPath(ctx, userPathRef.current);
       }
 
       // 3. 瞑想用ドット
@@ -304,8 +407,10 @@ export default function TracingGame({ onFinish }) {
             (target - seg.lens[i - 1]) / (seg.lens[i] - seg.lens[i - 1] || 1);
           const dotX = p1.x + (p2.x - p1.x) * ratio;
           const dotY = p1.y + (p2.y - p1.y) * ratio;
+          dotRef.current.x = dotX;
+          dotRef.current.y = dotY;
 
-          // --- A. スパークル生成 ---
+          // --- スパークル生成 ---
           if (Math.random() > 0.3) {
             // パフォーマンスのため、時々のみ生成
             particlesRef.current.push({
@@ -316,48 +421,19 @@ export default function TracingGame({ onFinish }) {
               life: 1.0,
               size: Math.random() * 3 + 1,
             });
-          }
-
-          // --- B. スパークルの更新と描画 ---
-          particlesRef.current.forEach((p) => {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.life -= 0.02; // スパークルのフェード速度
-
-            if (p.life > 0) {
-              ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-              ctx.fill();
+            if (particlesRef.current.length > 300) {
+              particlesRef.current.splice(0, 100);
             }
-          });
-          // 消えたスパークルを削除
-          particlesRef.current = particlesRef.current.filter((p) => p.life > 0);
-
-          // --- C. 発光する先端を描画 ---
-          // 外側のグロー
-          ctx.shadowBlur = 20;
-          ctx.shadowColor = "rgba(255, 255, 255, 0.8)";
-          ctx.fillStyle = "rgba(34, 211, 238, 0.5)"; // シアン系の色味
-          ctx.beginPath();
-          ctx.arc(dotX, dotY, 10, 0, Math.PI * 2);
-          ctx.fill();
-
-          // 明るい白色の中心
-          ctx.shadowBlur = 5;
-          ctx.fillStyle = "white";
-          ctx.beginPath();
-          ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.shadowBlur = 0;
+          }
         }
       }
+      renderMeditativeElements(ctx);
       ctx.restore();
       frameId = requestAnimationFrame(render);
     };
     render();
     return () => cancelAnimationFrame(frameId);
-  }, [pathsReady, maxScroll, isMobile]);
+  }, [pathsReady, isMobile]);
 
   const scrollToChar = (direction) => {
     const positions = charPositionsRef.current;
@@ -403,11 +479,14 @@ export default function TracingGame({ onFinish }) {
     }
   };
 
-  const handleExit = () => {
-    if (rhythmRef.current) {
-      rhythmRef.current.pause();
-    }
-    setShowFinishScreen(true);
+  const handleOpenFinishModal = () => {
+    if (rhythmRef.current) rhythmRef.current.pause();
+    setShowFinishedModal(true);
+  };
+  const handleFinalExit = () => {
+    setShowFinishedModal(false);
+    // 本ゲームから親（トマトウィジェット）にisGameStarted→falseを知らせる
+    if (onFinish) onFinish();
   };
 
   return (
@@ -476,11 +555,32 @@ export default function TracingGame({ onFinish }) {
             userPathRef.current.push({ x, y });
           }}
           onPointerUp={() => (tracingRef.current = false)}
-          className="w-full h-full touch-none cursor-crosshair"
+          className="w-full h-full touch-none cursor-crosshair touch-none overscroll-none"
         />
 
+        {/* スマートフォンのUI */}
         {isMobile && (
           <div className="absolute bottom-40 left-6 flex flex-col items-center gap-4 z-[2000]">
+            <button
+              onClick={handleOpenFinishModal}
+              className="w-12 h-12 mb-4 rounded-xl bg-slate-800/40 border border-white/10 flex items-center justify-center backdrop-blur-sm active:scale-90 transition-transform"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="24"
+                height="24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-slate-200"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
             {/* 戻るボタン */}
             <button
               onClick={() => scrollToChar("prev")}
@@ -529,21 +629,13 @@ export default function TracingGame({ onFinish }) {
           </div>
         )}
 
-        {!isMobile && (
-          <div className="absolute top-1 left-2 text-left pointer-events-none opacity-40 max-w-[50vw]">
-            <p className="text-slate-300 italic text-[16px] max-w-md leading-relaxed">
-              {quote?.en} ({quote?.author})
-            </p>
-          </div>
-        )}
+        {/* PCのUI */}
 
         {/* 中央の説明文（モバイルでは非表示）*/}
         {!isMobile && (
-          <div className="absolute top-1 left-1/2 -translate-x-1/2 pointer-events-none">
-            {!isMobile && (
-              <div className="absolute top-1 left-1/2 -translate-x-1/2 pointer-events-none max-w-[50vw]">
-                <span
-                  className={`
+          <div className="absolute top-4 left-12  pointer-events-none">
+            <span
+              className={`
     text-[18px]
     text-white/50
     font-bold
@@ -552,11 +644,9 @@ export default function TracingGame({ onFinish }) {
     leading-none
     ${i18n.language === "ja" ? "" : "uppercase tracking-widest"}
   `}
-                >
-                  {t("tracing_game.instruction")}
-                </span>
-              </div>
-            )}
+            >
+              {t("tracing_game.instruction")}
+            </span>
           </div>
         )}
 
@@ -597,25 +687,32 @@ export default function TracingGame({ onFinish }) {
           </button>
         </div>
         {/* 終了ボタン：誤タップ防止のため左下 */}
-        {!isMobile ? (
-          <button
-            onClick={handleExit}
-            className="absolute bottom-20 left-8 bg-white/5 hover:bg-white/10 px-6 py-2 rounded-full text-[10px] tracking-widest uppercase transition-all border border-white/5"
-          >
-            {t("tracing_game.exit")}
-          </button>
-        ) : (
-          ""
+        {!isMobile && (
+          <div className="absolute bottom-20 left-8 text-left opacity-40">
+            <div className="flex flex-row space-between gap-20">
+              {" "}
+              <button
+                onClick={handleOpenFinishModal}
+                className="bg-white/5 hover:bg-white/10 px-6 py-2 rounded-full text-[10px] tracking-widest uppercase transition-all border border-white/5"
+              >
+                {t("tracing_game.exit")}
+              </button>
+              <p className="text-slate-300 italic text-[16px] leading-relaxed pointer-events-none ">
+                {quote?.en} ({quote?.author})
+              </p>
+            </div>
+          </div>
         )}
-        {showFinishScreen && (
+
+        {showFinishedModal && (
           <div className="absolute inset-0 z-[5000] flex items-center justify-center backdrop-blur-sm bg-black/40">
             <div
               className="
-        bg-white dark:bg-slate-900
-        border border-slate-200 dark:border-slate-700
+        bg-slate-900
+        border border-slate-700
         shadow-2xl rounded-3xl
         px-8 py-10 max-w-sm w-[90%]
-        text-slate-900 dark:text-slate-100
+        text-slate-100
         transition-all duration-300
       "
             >
@@ -624,15 +721,15 @@ export default function TracingGame({ onFinish }) {
                   {t("tracing_game.well_done")}
                 </h1>
 
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line">
+                <p className="text-slate-400 leading-relaxed whitespace-pre-line">
                   {t("tracing_game.well_done_msg")}
                 </p>
 
                 <button
-                  onClick={onFinish}
+                  onClick={handleFinalExit}
                   className="
             mt-4 px-6 py-2 rounded-full
-            bg-cyan-500/20 text-cyan-600 dark:text-cyan-300
+            bg-cyan-500/20 text-cyan-300
             hover:bg-cyan-500/30
             transition-all active:scale-95
           "

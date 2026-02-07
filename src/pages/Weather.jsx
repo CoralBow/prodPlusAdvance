@@ -38,14 +38,11 @@ export default function Weather({
 
   if (loadingWeather) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center space-y-4">
-        <div className="text-blue-600 dark:text-blue-400">
-          {" "}
-          <Spinner size={8} />
-          <p className="text-slate-500 dark:text-slate-400 animate-pulse font-bold">
-            {t("weather.loading")}
-          </p>
-        </div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center py-10">
+        <Spinner />
+        <p className="text-center text-slate-500 dark:text-slate-400 animate-pulse font-bold">
+          {t("weather.loading")}
+        </p>
       </div>
     );
   }

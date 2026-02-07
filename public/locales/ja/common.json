@@ -1,7 +1,8 @@
 {
   "date": {
     "long": "yyyy年M月d日 (E)",
-    "short": "M月d日 (E)"
+    "short": "M月d日 (E)",
+    "medium": "yyyy年d日M月"
   },
   "navigation": {
     "home": "ホーム",
@@ -14,16 +15,23 @@
   },
   "focus": {
     "title": "集中タイム",
+    "study": "勉強",
+    "work": "仕事",
     "start": "スタート",
     "pause": "一時停止",
     "playing_rain": "♪ 雨のBGM...",
     "playing_lofi": "♯ LO-FI BGM...",
     "break_remaining": "残り休憩時間",
     "well_done": "お疲れ様です。",
-    "well_done_msg": "25分間しっかり集中できました。ご褒美の休憩時間です。",
+    "break_ended_title": "休憩終了",
+    "break_ended_msg": "仕事を続けましょう。",
+    "well_done_msg": "{{minutes}}分間しっかり集中できました。ご褒美の休憩時間です。",
+    "well_done_work_msg": "集中お疲れ様でした！目の健康のために35メートルほど歩き、遠くの空を眺めてリフレッシュしましょう。",
     "start_break": "休憩を開始",
     "pomodoro_tech": "ポモドーロ・テクニック",
-    "pomodoro_desc": "25分の集中と5分の休憩を繰り返すことで、脳の疲れを防ぎ、高い生産性を維持する時間管理術です。"
+    "pomodoro_desc": "集中と休憩を繰り返すことで、脳の疲れを防ぎ、高い生産性を維持する時間管理術です。",
+    "mode_study": "学習モード (25/5)",
+    "mode_work": "仕事モード (52/17)"
   },
   "word_game": {
     "title": "ブレインブラスト",
@@ -98,7 +106,14 @@
     "email_sent_msg": "パスワードリセットメールを送信しました。",
     "wait_seconds": "{{count}}秒お待ちください",
     "resend_reset_link": "パスワードリセットURLを再送信",
-    "send_reset_link": "パスワードリセットURLを送信"
+    "send_reset_link": "パスワードリセットURLを送信",
+    "hero_title": "集中し、計画し、もっと穏やかに。",
+    "hero_desc": "Productivity++ はタスク・カレンダー・集中セッションを1つのシンプルな空間にまとめます。",
+    "feature_tasks": "サブタスクや習慣でタスクを整理",
+    "feature_focus": "ポモドーロ集中＋休憩タイマー内蔵",
+    "feature_calendar": "カレンダー表示で1週間を視覚的に計画",
+    "feature_sync": "クラウドで端末間同期",
+    "scroll_to_login": "ログイン / 新規登録 ↓"
   },
   "settings": {
     "title": "プロフィール設定",
@@ -183,7 +198,12 @@
     "details_show": "＋ 詳細",
     "details_hide": "－ 閉じる",
     "repeating_hide": "－ 非表示",
-    "repeating_show": "＋ 繰り返し ({{count}})"
+    "repeating_show": "＋ 繰り返し ({{count}})",
+    "series_title": "シリーズ進捗",
+    "edit_options": "更新設定",
+    "apply_single": "このタスクのみ",
+    "apply_all": "シリーズ全体",
+    "date_lock_hint": "シリーズの日付が自動的に管理されているため編集不可"
   },
   "weather": {
     "title": "天気予報",

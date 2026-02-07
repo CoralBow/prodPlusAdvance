@@ -6,9 +6,9 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useTheme } from "../contexts/ThemeContext";
 import { useTranslation } from "react-i18next";
 
-function Header() {
+function Header({ mobileMenuOpen, setMobileMenuOpen }) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const { t, i18n } = useTranslation();
@@ -23,8 +23,8 @@ function Header() {
   const isRu = i18n.language?.startsWith("ru");
 
   useEffect(() => {
-    setOpen(false);
-  }, [user]);
+    setMobileMenuOpen(false);
+  }, [user, setMobileMenuOpen]);
 
   const linkStyle = ({ isActive }) =>
     `px-2 py-2 rounded-xl ${
@@ -52,7 +52,15 @@ function Header() {
         {/* --- ヘッダー：ロゴ --- */}
         <div
           className="flex items-center justify-start"
-          onClick={() => (user && user.emailVerified ? navigate(`/`) : "")}
+          onClick={() => {
+            if (mobileMenuOpen) {
+              setMobileMenuOpen(false);
+              return;
+            }
+
+            if (user?.emailVerified) navigate("/");
+            else navigate("/auth");
+          }}
         >
           <div className="flex-shrink-0 cursor-pointer hover:scale-105 transition-transform">
             <img
@@ -100,14 +108,13 @@ function Header() {
             </>
           ) : (
             <div className="flex items-center gap-2">
-              {/* Login Button Logic... Simplified for brevity if needed but keeping structure */}
               <NavLink to="/auth" className={linkStyle}>
                 {t("navigation.login")}
               </NavLink>
             </div>
           )}
 
-          {/* Custom Language Dropdown (PC) */}
+          {/* PC版言語スイッチ */}
           <div className="relative ml-2">
             <button
               onClick={() => setLangMenuOpen(!langMenuOpen)}
@@ -161,102 +168,126 @@ function Header() {
           </button>
           <button
             className="text-2xl p-2 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-lg"
-            onClick={() => setOpen(!open)}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
-            {open ? "✕" : "☰"}
+            {mobileMenuOpen ? "✕" : "☰"}
           </button>
         </div>
       </nav>
 
       {/* モバイルメニュ */}
-      {open && (
-        <div className="absolute top-full left-0 w-full bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 space-y-4 shadow-2xl animate-in slide-in-from-top duration-200 z-[60] max-h-[90vh] overflow-y-auto">
-          {user && user.emailVerified ? (
-            <div className="space-y-2">
+      {mobileMenuOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[9999]"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div
+            className="fixed top-[64px] left-0 w-full z-[10000] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 space-y-4 shadow-2xl animate-in slide-in-from-top duration-200 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {user && user.emailVerified ? (
+              <div className="space-y-2">
+                <NavLink
+                  to="/"
+                  className={mobileLinkStyle}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t("navigation.home")}
+                </NavLink>
+                <NavLink
+                  to="/todo"
+                  className={mobileLinkStyle}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t("navigation.todo")}
+                </NavLink>
+                <NavLink
+                  to="/calendar"
+                  className={mobileLinkStyle}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t("navigation.calendar")}
+                </NavLink>
+                <NavLink
+                  to="/weather"
+                  className={mobileLinkStyle}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t("navigation.weather")}
+                </NavLink>
+                <NavLink
+                  to="/settings"
+                  className={mobileLinkStyle}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t("navigation.settings")}
+                </NavLink>
+              </div>
+            ) : (
               <NavLink
-                to="/"
+                to="/auth"
                 className={mobileLinkStyle}
-                onClick={() => setOpen(false)}
+                onClick={() => setMobileMenuOpen(false)}
               >
-                {t("navigation.home")}
+                {t("navigation.login")}
               </NavLink>
-              <NavLink
-                to="/todo"
-                className={mobileLinkStyle}
-                onClick={() => setOpen(false)}
-              >
-                {t("navigation.todo")}
-              </NavLink>
-              <NavLink
-                to="/calendar"
-                className={mobileLinkStyle}
-                onClick={() => setOpen(false)}
-              >
-                {t("navigation.calendar")}
-              </NavLink>
-              <NavLink
-                to="/weather"
-                className={mobileLinkStyle}
-                onClick={() => setOpen(false)}
-              >
-                {t("navigation.weather")}
-              </NavLink>
-              <NavLink
-                to="/settings"
-                className={mobileLinkStyle}
-                onClick={() => setOpen(false)}
-              >
-                {t("navigation.settings")}
-              </NavLink>
-            </div>
-          ) : (
-            <NavLink
-              to="/auth"
-              className={mobileLinkStyle}
-              onClick={() => setOpen(false)}
-            >
-              {t("navigation.login")}
-            </NavLink>
-          )}
+            )}
 
-          {/* Mobile Language Switcher (Inline Row) */}
-          <div className="py-4 border-t border-b border-slate-100 dark:border-slate-800/50">
-            <p className="text-xs font-black text-slate-400 text-center mb-3 uppercase tracking-widest">
-              Language
-            </p>
-            <div className="flex justify-center gap-2">
-              {languages.map((lang) => (
-                <button
-                  key={lang.code}
-                  onClick={() => changeLanguage(lang.code)}
-                  className={`px-6 py-2 rounded-lg text-sm font-black transition-all
+            {/* モバイル言語スイッチ */}
+            <div className="py-4 border-t border-b border-slate-100 dark:border-slate-800/50">
+              <p className="text-xs font-black text-slate-400 text-center mb-3 uppercase tracking-widest">
+                Language
+              </p>
+              <div className="flex justify-center gap-2">
+                {languages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => changeLanguage(lang.code)}
+                    className={`px-6 py-2 rounded-lg text-sm font-black transition-all
                      ${
                        i18n.language === lang.code
                          ? "bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none"
                          : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
                      }
                    `}
-                >
-                  {lang.label}
-                </button>
-              ))}
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {user && (
+            {user && (
+              <button
+                onClick={async (e) => {
+                  e.preventDefault();
+                  setMobileMenuOpen(false);
+                  await signOut(auth);
+                  navigate("/auth");
+                }}
+                className="w-full text-center px-4 py-4 text-red-500 font-bold bg-slate-50 dark:bg-slate-900/50 rounded-xl"
+              >
+                {t("navigation.logout")}
+              </button>
+            )}
             <button
-              onClick={async (e) => {
-                e.preventDefault();
-                setOpen(false);
-                await signOut(auth);
-                navigate("/auth");
-              }}
-              className="w-full text-center px-4 py-4 text-red-500 font-bold bg-slate-50 dark:bg-slate-900/50 rounded-xl"
+              onClick={() => setMobileMenuOpen(false)}
+              className="
+    w-full flex justify-center pt-3 pb-1
+    active:scale-95 transition
+  "
+              aria-label="Close menu"
             >
-              {t("navigation.logout")}
+              <div
+                className="
+      w-14 h-1.5 rounded-full
+      bg-slate-300 dark:bg-slate-700
+    "
+              />
             </button>
-          )}
-        </div>
+          </div>
+        </>
       )}
     </header>
   );

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-
 const SOUNDS = {
   correct: "/sounds/correct-6033.mp3", //https://pixabay.com/sound-effects/correct-6033/
   error: "/sounds/error-04-199275.mp3", //https://pixabay.com/sound-effects/error-04-199275/
@@ -18,8 +17,8 @@ export default function WordGame({ onFinish }) {
   const [hasStartedFalling, setHasStartedFalling] = useState(false);
   const [combo, setCombo] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [totalWords, setTotalWords] = useState(0);
   const { t } = useTranslation();
-
 
   const playerRef = useRef(null);
   const bgMusicRef = useRef(null);
@@ -103,6 +102,9 @@ export default function WordGame({ onFinish }) {
     "SKILL",
     "TASK",
     "CHILL",
+    "IMAGINATION",
+    "WILL",
+    "DETERMINATION",
   ];
 
   const startGame = async (cleanKeywords) => {
@@ -112,7 +114,7 @@ export default function WordGame({ onFinish }) {
     try {
       const target = allWords[0] || "focus";
       const res = await fetch(
-        `https://api.datamuse.com/words?ml=${target}&max=50`,
+        `https://api.datamuse.com/words?ml=${target}&max=100`,
       );
 
       if (res.ok) {
@@ -122,11 +124,11 @@ export default function WordGame({ onFinish }) {
           .filter((item) => {
             const word = item.word.toLowerCase();
             return (
-              item.score > 2500 && // 1. MUST HAVE HIGH RELEVANCE
-              word.length <= 8 && // 2. Length check
+              item.score > 2500 && // 1. ハイレベルの関係性
+              word.length <= 8 && // 2. 長さ確認
               word.length >= 3 &&
-              //!word.includes(" ") && // 3. No phrases
-              !BLACKLIST.includes(word) // 4. Safety blacklist
+              /^[a-z]+$/.test(word) && // 3. 英文字のみ
+              !BLACKLIST.includes(word) // 4. ブラックリスト言葉を弾ける
             );
           })
           .map((item) => item.word.toLowerCase());
@@ -147,16 +149,18 @@ export default function WordGame({ onFinish }) {
       .sort(() => Math.random() - 0.5)
       .slice(0, wordCount);
 
+    setTotalWords(finalPool.length);
+
     const initialWords = finalPool.map((text, i) => ({
       text,
       id: Math.random(),
       x: Math.random() * 60 + 20, // 左右の端に寄りすぎないように調整
-      y: isMobile ? -i * 180 - 100 : -i * 150 - 100,
+      y: isMobile ? -i * 100 - 150 : -i * 60 - 100,
       rotation: Math.random() * 360,
       rotSpeed: isMobile
         ? Math.random() * 1.0 - 0.5
         : Math.random() * 2.0 - 1.0,
-      speed: isMobile ? Math.random() * 0.5 + 0.3 : Math.random() * 0.7 + 0.4,
+       speed: isMobile ? Math.random() * 0.5 + 0.3 : Math.random() * 0.7 + 0.4,
     }));
 
     setFallingWords(initialWords);
@@ -231,12 +235,14 @@ export default function WordGame({ onFinish }) {
           </div>
 
           <div className="bg-slate-900/50 p-6 rounded-3xl border border-white/10 backdrop-blur-md max-w-sm">
-            <p className="text-blue-400 font-bold mb-2 text-sm">{t("word_game.instruction_title")}</p>
+            <p className="text-blue-400 font-bold mb-2 text-sm">
+              {t("word_game.instruction_title")}
+            </p>
             <p className="text-slate-300 text-xs leading-relaxed">
               {t("word_game.instruction_text")}
               <br />
               <span className="text-orange-400 font-bold text-xs">
-                 {t("word_game.note")}
+                {t("word_game.note")}
                 <br />
                 {t("word_game.instruction_disclaimer")}
               </span>
@@ -273,7 +279,8 @@ export default function WordGame({ onFinish }) {
       {/* 3. プレイ中 */}
       {gameState === "playing" && (
         <div className="flex flex-col h-full w-full bg-slate-950 text-white overflow-hidden">
-          <div className="px-8 pt-12 pb-6 flex justify-between items-center bg-gradient-to-b from-slate-900 via-slate-900 to-transparent z-20">
+          <div className="px-8 pt-12 pb-6 flex justify-between items-start bg-gradient-to-b from-slate-900 via-slate-900 to-transparent z-20">
+            {/* Left: Score */}
             <div>
               <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">
                 {t("word_game.score")}
@@ -282,16 +289,30 @@ export default function WordGame({ onFinish }) {
                 {score}
               </p>
             </div>
-            {combo > 1 && (
-              <div className="flex flex-col items-end">
-                <span className="text-orange-500 text-3xl font-black italic animate-bounce">
-                  {combo}
-                </span>
-                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
-                  {t("word_game.combo")}
-                </span>
+
+            {/* 右のパネル */}
+            <div className="flex flex-col items-end">
+              {/* 残り言葉の数を表示 */}
+              <div className="mb-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                <p className="text-[10px] font-bold tracking-widest text-slate-400">
+                  <span className="text-blue-400">
+                    {totalWords - fallingWords.length}
+                  </span>{" "}
+                  / {totalWords}
+                </p>
+                 {/* コンボ数を表示 */}
               </div>
-            )}
+              {combo > 1 && (
+                <div className="flex flex-col items-end">
+                  <span className="text-orange-500 text-3xl font-black italic animate-bounce">
+                    {combo}
+                  </span>
+                  <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
+                    {t("word_game.combo")}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ゲームフィールド：モバイルでは上半分に制限 */}
@@ -344,7 +365,9 @@ export default function WordGame({ onFinish }) {
       {gameState === "finished" && (
         <div className="flex flex-col items-center justify-center h-full text-white bg-blue-900/20 backdrop-blur-xl animate-in zoom-in duration-500">
           <div className="bg-slate-900 p-12 rounded-[3rem] border border-white/10 shadow-2xl text-center space-y-6">
-            <h2 className="text-2xl font-bold text-blue-400">{t("word_game.result")}</h2>
+            <h2 className="text-2xl font-bold text-blue-400">
+              {t("word_game.result")}
+            </h2>
             <p className="text-7xl font-black text-white tracking-tighter">
               {score}
             </p>

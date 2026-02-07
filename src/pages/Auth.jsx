@@ -29,11 +29,14 @@ export default function Auth() {
   const timerRef = useRef(null);
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const formRef = useRef(null);
 
   const isEmailValid = useMemo(() => /^\S+@\S+\.\S+$/.test(email), [email]);
   const isPasswordValid = password.length >= 6;
   const canSubmit = isEmailValid && isPasswordValid && !loading;
   const pollCountRef = useRef(0);
+  const showLanding = mode !== "verify";
+  const isRu = i18n.language?.startsWith("ru");
 
   // 1. 認証状態リスナー
   useEffect(() => {
@@ -47,7 +50,7 @@ export default function Auth() {
       setUser(u);
 
       if (u.emailVerified) {
-        navigate("/");
+        navigate("/", { replace: true });
       } else {
         setMode("verify");
       }
@@ -82,7 +85,7 @@ export default function Auth() {
     return () => {
       if (poller) clearInterval(poller);
     };
-  }, [mode, user, navigate]);
+  }, [mode, user, navigate, t]);
 
   // 3. UIリセット＆グローバルタイマーのクリーンアップ
   useEffect(() => {
@@ -99,6 +102,19 @@ export default function Auth() {
       }
     };
   }, [mode]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const scrollToForm = () => {
+    formRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
 
   function mapFirebaseError(code) {
     switch (code) {
@@ -201,174 +217,221 @@ export default function Auth() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 p-5">
-      <div className="bg-white dark:bg-slate-900 shadow-xl rounded-3xl p-8 max-w-md w-full border border-slate-200 dark:border-slate-800 transition-all min-h-[400px] flex flex-col justify-center">
-        {/* グローバルローディング状態 */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center space-y-4 py-10">
-            <Spinner size={8} />
-            <p className="text-slate-500 dark:text-slate-400 animate-pulse font-bold">
-              {t("auth.loading")}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div
+        className={`${isRu ? "max-w-4xl py-8 gap-8" : "max-w-6xl py-12 gap-12"}
+ mx-auto px-6 grid items-start
+        ${showLanding ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}
+      `}
+      >
+        {/* 左：イントロダクション */}
+        {showLanding && (
+          <div className="space-y-8 lg:sticky lg:top-24">
+            <h1
+              className={`${isRu ? "text-2xl" : "text-4xl"} font-black text-slate-900 dark:text-white leading-tight`}
+            >
+              {t("auth.hero_title")}
+            </h1>
+
+            <p
+              className={`${isRu ? "text-md" : "text-xl"}  text-slate-600 dark:text-slate-400`}
+            >
+              {t("auth.hero_desc")}
             </p>
+
+            <div className="space-y-3 text-sm text-left text-black dark:text-slate-100">
+              <p>✅ {t("auth.feature_tasks")}</p>
+              <p>⏳ {t("auth.feature_focus")}</p>
+              <p>📅 {t("auth.feature_calendar")}</p>
+              <p>☁️ {t("auth.feature_sync")}</p>
+            </div>
+
+            {/* Mobile-only CTA */}
+            <div className="lg:hidden pt-6">
+              <button
+                onClick={scrollToForm}
+                className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black shadow-lg active:scale-95 transition-all"
+              >
+                {t("auth.scroll_to_login")}
+              </button>
+            </div>
           </div>
-        ) : mode === "verify" ? (
-          /* 認証確認画面 */
-          <div className="text-center space-y-6 animate-in fade-in duration-500">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-3xl border border-blue-100 dark:border-blue-800">
-              <h2 className="text-xl font-black mb-2 dark:text-white">
-                {t("auth.verify_title")}
-              </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {user?.email}
+        )}
+
+        {/* 右：ログインフォーム */}
+        <div
+          ref={formRef}
+          className="bg-white dark:bg-slate-900 shadow-xl rounded-3xl p-8 max-w-md w-full border border-slate-200 dark:border-slate-800 transition-all min-h-[400px] flex flex-col justify-center"
+        >
+          {/* グローバルローディング状態 */}
+          {loading ? (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center py-10">
+              <Spinner />
+              <p className="text-center text-slate-500 dark:text-slate-400 animate-pulse font-bold">
+                {t("auth.loading")}
               </p>
             </div>
+          ) : mode === "verify" ? (
+            /* 認証確認画面 */
+            <div className="text-center space-y-6 animate-in fade-in duration-500">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-3xl border border-blue-100 dark:border-blue-800">
+                <h2 className="text-xl font-black mb-2 dark:text-white">
+                  {t("auth.verify_title")}
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {user?.email}
+                </p>
+              </div>
 
-            {/* 再送セクション */}
-            <div className="min-h-[100px] flex flex-col items-center justify-center">
-              {!showResend ? (
-                <button
-                  onClick={() => setShowResend(true)}
-                  className="text-xs text-slate-400 bg-white dark:bg-slate-900 underline hover:text-slate-600 transition-colors"
-                >
-                  {t("auth.verify_resend_hint")}
-                </button>
-              ) : (
-                <div className="w-full space-y-3">
-                  {cooldown > 0 ? (
-                    <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 text-sm font-bold">
-                      {t("auth.verify_cooldown")} {cooldown} {t("auth.sec")}
-                    </div>
-                  ) : (
-                    <button
-                      disabled={isResending}
-                      onClick={handleResend}
-                      className="w-full py-4 bg-blue-600 text-white rounded-xl font-black hover:bg-blue-700 shadow-lg active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      {isResending
-                        ? t("auth.verify_resending")
-                        : t("auth.verify_resend")}
-                    </button>
-                  )}
-                  {sent && cooldown > 0 && (
-                    <p className="text-green-600 dark:text-green-400 text-xs font-bold">
-                      {t("auth.verify_resent")}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* フッター操作 */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4">
-              <button
-                onClick={handleManualRefresh}
-                className="text-xs text-blue-600 bg-white dark:bg-slate-900 font-bold hover:opacity-70"
-              >
-                {t("auth.verify_manual")}
-              </button>
-              <button
-                onClick={() => auth.signOut()}
-                className="text-xs text-slate-400 underline bg-white dark:bg-slate-900"
-              >
-                {t("auth.verify_other_account")}
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* ログイン／新規登録フォーム */
-          <>
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-8">
-              <button
-                onClick={() => {
-                  setError("");
-                  setMode("login");
-                }}
-                className={`flex-1 py-2 rounded-xl font-bold transition-all ${
-                  mode === "login"
-                    ? "bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-500"
-                    : "bg-slate-100 dark:bg-slate-900 text-slate-500"
-                }`}
-              >
-                {t("auth.login")}
-              </button>
-              <button
-                onClick={() => {
-                  setError("");
-                  setMode("register");
-                }}
-                className={`flex-1 py-2 rounded-xl font-bold transition-all ${
-                  mode === "register"
-                    ? "bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-500"
-                    : "bg-slate-100 dark:bg-slate-900 text-slate-500"
-                }`}
-              >
-                {t("auth.register")}
-              </button>
-            </div>
-            <form
-              onSubmit={handleSubmit}
-              className="flex flex-col gap-4"
-              noValidate
-            >
-              <input
-                type="email"
-                placeholder={t("auth.email")}
-                className="p-3 rounded-xl border dark:border-slate-700 bg-transparent dark:text-white"
-                onChange={(e) => setEmail(e.target.value)}
-                value={email}
-              />
-              <PasswordInput
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t("auth.password")}
-                ariaLabel={t("auth.password")}
-              />
-
-              <div className="min-h-[20px] px-1">
-                {!isEmailValid && email.length > 0 && (
-                  <p className="text-red-500 text-[11px] font-bold">
-                    {t("auth.email_invalid")}
-                  </p>
-                )}
-                {password.length > 0 && password.length < 6 && (
-                  <p className="text-red-500 text-[11px] font-bold">
-                    {t("auth.password_invalid")}
-                  </p>
-                )}
-                {error && (
-                  <p className="text-red-500 text-[11px] font-bold">{error}</p>
+              {/* 再送セクション */}
+              <div className="min-h-[100px] flex flex-col items-center justify-center">
+                {!showResend ? (
+                  <button
+                    onClick={() => setShowResend(true)}
+                    className="text-xs text-slate-400 bg-white dark:bg-slate-900 underline hover:text-slate-600 transition-colors"
+                  >
+                    {t("auth.verify_resend_hint")}
+                  </button>
+                ) : (
+                  <div className="w-full space-y-3">
+                    {cooldown > 0 ? (
+                      <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 text-sm font-bold">
+                        {t("auth.verify_cooldown")} {cooldown} {t("auth.sec")}
+                      </div>
+                    ) : (
+                      <button
+                        disabled={isResending}
+                        onClick={handleResend}
+                        className="w-full py-4 bg-blue-600 text-white rounded-xl font-black hover:bg-blue-700 shadow-lg active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {isResending
+                          ? t("auth.verify_resending")
+                          : t("auth.verify_resend")}
+                      </button>
+                    )}
+                    {sent && cooldown > 0 && (
+                      <p className="text-green-600 dark:text-green-400 text-xs font-bold">
+                        {t("auth.verify_resent")}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
-              <button
-                disabled={!canSubmit}
-                className={`py-3 rounded-xl font-bold shadow-lg transition-all ${
-                  canSubmit
-                    ? "bg-blue-600 text-white shadow-blue-500/30 active:scale-95 cursor-pointer"
-                    : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 shadow-none cursor-not-allowed"
-                }`}
+              {/* フッター操作 */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4">
+                <button
+                  onClick={handleManualRefresh}
+                  className="text-xs text-blue-600 bg-white dark:bg-slate-900 font-bold hover:opacity-70"
+                >
+                  {t("auth.verify_manual")}
+                </button>
+                <button
+                  onClick={() => auth.signOut()}
+                  className="text-xs text-slate-400 underline bg-white dark:bg-slate-900"
+                >
+                  {t("auth.verify_other_account")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* ログイン／新規登録フォーム */
+            <>
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-8">
+                <button
+                  onClick={() => {
+                    setError("");
+                    setMode("login");
+                  }}
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                    mode === "login"
+                      ? "bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-500"
+                      : "bg-slate-100 dark:bg-slate-900 text-slate-500"
+                  }`}
+                >
+                  {t("auth.login")}
+                </button>
+                <button
+                  onClick={() => {
+                    setError("");
+                    setMode("register");
+                  }}
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                    mode === "register"
+                      ? "bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-500"
+                      : "bg-slate-100 dark:bg-slate-900 text-slate-500"
+                  }`}
+                >
+                  {t("auth.register")}
+                </button>
+              </div>
+              <form
+                onSubmit={handleSubmit}
+                className="flex flex-col gap-4"
+                noValidate
               >
-                {loading
-                  ? t("auth.loading")
-                  : mode === "login"
-                    ? t("auth.login")
-                    : t("auth.register")}
-              </button>
+                <input
+                  type="email"
+                  placeholder={t("auth.email")}
+                  className="p-3 rounded-xl border dark:border-slate-700 bg-transparent dark:text-white"
+                  onChange={(e) => setEmail(e.target.value)}
+                  value={email}
+                />
+                <PasswordInput
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t("auth.password")}
+                  ariaLabel={t("auth.password")}
+                />
 
-              {mode === "login" && (
-                <div className="mt-2 text-right">
-                  <a
-                    href="/forgot-password"
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                  >
-                    {t("auth.forgot_password")}
-                  </a>
+                <div className="min-h-[20px] px-1">
+                  {!isEmailValid && email.length > 0 && (
+                    <p className="text-red-500 text-[11px] font-bold">
+                      {t("auth.email_invalid")}
+                    </p>
+                  )}
+                  {password.length > 0 && password.length < 6 && (
+                    <p className="text-red-500 text-[11px] font-bold">
+                      {t("auth.password_invalid")}
+                    </p>
+                  )}
+                  {error && (
+                    <p className="text-red-500 text-[11px] font-bold">
+                      {error}
+                    </p>
+                  )}
                 </div>
-              )}
-            </form>
-          </>
-        )}
-      </div>
+
+                <button
+                  disabled={!canSubmit}
+                  className={`py-3 rounded-xl font-bold shadow-lg transition-all ${
+                    canSubmit
+                      ? "bg-blue-600 text-white shadow-blue-500/30 active:scale-95 cursor-pointer"
+                      : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 shadow-none cursor-not-allowed"
+                  }`}
+                >
+                  {loading
+                    ? t("auth.loading")
+                    : mode === "login"
+                      ? t("auth.login")
+                      : t("auth.register")}
+                </button>
+
+                {mode === "login" && (
+                  <div className="mt-2 text-left">
+                    <a
+                      href="/forgot-password"
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      {t("auth.forgot_password")}
+                    </a>
+                  </div>
+                )}
+              </form>
+            </>
+          )}
+        </div>
+      </div>{" "}
     </div>
   );
 }

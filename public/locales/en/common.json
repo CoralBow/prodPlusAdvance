@@ -1,7 +1,8 @@
 {
-    "date": {
-    "long": "/MMMM d yyyy (E)",
-    "short": "M/d (E)"
+  "date": {
+    "long": "MMMM d yyyy (E)",
+    "short": "M/d (E)",
+    "medium": "d/M/yyyy"
   },
   "navigation": {
     "home": "Home",
@@ -14,16 +15,23 @@
   },
   "focus": {
     "title": "FOCUS TIME",
+    "study": "STUDY",
+    "work": "WORK",
     "start": "START",
     "pause": "PAUSE",
     "playing_rain": "♪ RAIN SOUNDS",
     "playing_lofi": "♯ LO-FI MUSIC",
     "break_remaining": "Break Remaining",
     "well_done": "Well done.",
-    "well_done_msg": "You focused well for 25 minutes. Time for a well-deserved break.",
+    "break_ended_title": "Break Over!",
+    "break_ended_msg": "It's time to get back to work.",
+    "well_done_msg": "You focused well for {{minutes}} minutes. Time for a well-deserved break.",
+    "well_done_work_msg": "Excellent focus! Make sure to walk 35 meters and watch the sky to aid your eyes.",
     "start_break": "Start Break",
     "pomodoro_tech": "Pomodoro Technique",
-    "pomodoro_desc": "Cycle of 25m focus & 5m break. Keeps brain fresh & productivity high."
+    "pomodoro_desc": "Cycle of focus & break. Keeps brain fresh & productivity high.",
+    "mode_study": "Study Mode (25/5)",
+    "mode_work": "Work Mode (52/17)"
   },
   "word_game": {
     "title": "Brain Blast",
@@ -50,7 +58,7 @@
     "well_done": "Well done 🌙",
     "well_done_msg": "You did a great job today.\nHope this helped you relax.",
     "close": "Close",
-    "instruction": "Trace characters",
+    "instruction": "Trace characters and relax your mind",
     "undo": "Undo stroke"
   },
   "auth": {
@@ -97,7 +105,14 @@
     "email_sent_msg": "Password reset email sent.",
     "wait_seconds": "Please wait {{count}} seconds",
     "resend_reset_link": "Resend reset link",
-    "send_reset_link": "Send reset link"
+    "send_reset_link": "Send reset link",
+    "hero_title": "Focus better. Plan smarter. Live calmer.",
+    "hero_desc": "Productivity++ combines tasks, calendar, and focus sessions into one clean space.",
+    "feature_tasks": "Organize tasks with subtasks and routines",
+    "feature_focus": "Pomodoro focus + break timer built in",
+    "feature_calendar": "Plan your week visually in calendar view",
+    "feature_sync": "Cloud sync across devices",
+    "scroll_to_login": "Login / Register ↓"
   },
 
   "settings": {
@@ -127,8 +142,8 @@
     "deleting": "Deleting...",
     "success_updated": "Profile updated! 🎉",
     "error_save": "Failed to save.",
-    "error_name_too_long" : "Name is too long. \nPlease enter name under 50 symbols.",
-    "error_quote_too_long" : "Quote is too long. \nPlease enter text under 500 symbols.",
+    "error_name_too_long": "Name is too long. \nPlease enter name under 50 symbols.",
+    "error_quote_too_long": "Quote is too long. \nPlease enter text under 500 symbols.",
     "error_password_empty": "Please enter a password.",
     "success_password_updated": "Password updated.",
     "error_wrong_password": "Current password is incorrect.",
@@ -138,7 +153,7 @@
     "error_delete_wrong_password": "Incorrect password.",
     "error_delete_failed": "An error occurred. Please try again.",
     "loading": "Loading...",
-    "generate" : "Generate an avatar"
+    "generate": "Generate an avatar"
   },
   "calendar": {
     "title": "Calendar",
@@ -183,7 +198,12 @@
     "details_show": "＋ Details",
     "details_hide": "－ Close",
     "repeating_hide": "－ Hide",
-    "repeating_show": "＋ Repeating ({{count}})"
+    "repeating_show": "＋ Repeating ({{count}})",
+    "series_title": "Series Progress",
+    "edit_options": "Update Options",
+    "apply_single": "Only this task",
+    "apply_all": "All tasks in series",
+    "date_lock_hint": "Series dates are managed automatically and cannot be edited"
   },
   "weather": {
     "title": "Weather Forecast",

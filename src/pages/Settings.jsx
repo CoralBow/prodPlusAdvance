@@ -89,14 +89,11 @@ export default function Settings({ user }) {
 
   if (!user || loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center space-y-4">
-        <div className="text-blue-600 dark:text-blue-400">
-          {" "}
-          <Spinner size={8} />
-          <p className="text-slate-500 dark:text-slate-400 animate-pulse font-bold">
-            {t("settings.loading")}
-          </p>
-        </div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center py-10">
+        <Spinner />
+        <p className="text-center text-slate-500 dark:text-slate-400 animate-pulse font-bold">
+          {t("settings.loading")}
+        </p>
       </div>
     );
   }
@@ -124,7 +121,6 @@ export default function Settings({ user }) {
       });
 
       setAvatarUrl(finalAvatar);
-      // Fix: Update originalProfile after successful save so cancel works correctly
       setOriginalProfile({
         displayName: displayName,
         quote: quote,
@@ -135,8 +131,8 @@ export default function Settings({ user }) {
       toast.success(t("settings.success_updated"));
     } catch (err) {
       if (import.meta.env.MODE === "development") {
-          console.error(err);
-        }
+        console.error(err);
+      }
       toast.error(t("settings.error_save"));
     } finally {
       setSaving(false);
@@ -234,6 +230,7 @@ export default function Settings({ user }) {
 
       // Firebase Authentication 上のユーザーを削除
       await deleteUser(currentUser);
+      localStorage.clear();
 
       deleted = true;
 
@@ -241,8 +238,8 @@ export default function Settings({ user }) {
       navigate("/auth");
     } catch (err) {
       if (import.meta.env.MODE === "development") {
-          console.error(err);
-        }
+        console.error(err);
+      }
       if (
         err.code === "auth/invalid-credential" ||
         err.code === "auth/wrong-password"

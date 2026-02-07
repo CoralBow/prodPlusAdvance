@@ -38,41 +38,39 @@ export default function Home({
 
   const todaysTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
-      // 期限が設定されているタスクの場合
-      if (task.dueDate) {
-        // 今日が期限、または期限切れかつ未完了のタスクを表示
-        const isPastOrToday = task.dueDate <= todayISO;
+      let isCompletedToday = false;
 
-        if (isPastOrToday) {
-          if (!task.done) return true; // 期限切れ・本日分の未完了タスクはすべて表示
-
-          // 完了済みの場合は「今日完了したもの」のみ表示
-          if (task.completedAt) {
+      if (task.done) {
+        if (task.completedAt) {
+          try {
             const doneDate = task.completedAt.toDate
               ? task.completedAt.toDate()
               : new Date(task.completedAt);
 
-            return format(doneDate, "yyyy-MM-dd") === todayISO;
+            if (!isNaN(doneDate.getTime())) {
+              isCompletedToday = format(doneDate, "yyyy-MM-dd") === todayISO;
+            }
+          } catch (e) {
+            if (import.meta.env.MODE === "development") {
+              console.error(e);
+            }
           }
+        } else {
+          isCompletedToday = true;
+        }
+      }
+
+      if (task.dueDate) {
+        const isPastOrToday = task.dueDate <= todayISO;
+        if (isPastOrToday) {
+          if (!task.done) return true;
+          if (isCompletedToday) return true;
         }
         return false;
+      } else {
+        if (!task.done) return true;
+        return isCompletedToday;
       }
-
-      // 期限が設定されていないタスクの場合
-      if (!task.dueDate) {
-        if (!task.done) return true; // 未完了のタスクは常に表示
-
-        // 完了済みの場合は今日完了したもののみ表示
-        if (task.completedAt) {
-          const doneDate = task.completedAt.toDate
-            ? task.completedAt.toDate()
-            : new Date(task.completedAt);
-
-          return format(doneDate, "yyyy-MM-dd") === todayISO;
-        }
-      }
-
-      return false;
     });
     // 元の配列を破壊しないようにスプレッドでコピーしてからソート
     return [...filtered].sort((a, b) => {
@@ -119,26 +117,36 @@ export default function Home({
   }, []);
 
   const dismissTaskAlert = (taskId) => {
-    const updated = {
-      ...dismissedMap,
-      [todayISO]: {
-        ...(dismissedMap[todayISO] || {}),
-        [taskId]: true,
-      },
-    };
-    setDismissedMap(updated);
-    localStorage.setItem("umbrellaDismissedMap", JSON.stringify(updated));
+    setDismissedMap((prev) => {
+      const updated = {
+        ...prev,
+        [todayISO]: {
+          ...(prev[todayISO] || {}),
+          [taskId]: true,
+        },
+      };
+
+      localStorage.setItem("umbrellaDismissedMap", JSON.stringify(updated));
+
+      return updated;
+    });
   };
-  const umbrellaTasks = tasks.filter((task) => task.dueDate === todayISO);
-  const tasksNeedingUmbrella = todayWeather
-    ? umbrellaTasks.filter((task) => {
-        const dismissedForToday = dismissedMap[todayISO] || {};
-        return (
-          !dismissedForToday[task.id] &&
-          shouldShowUmbrellaAlert([task], todayWeather)
-        );
-      })
-    : [];
+
+  const umbrellaTasks = useMemo(() => {
+    return tasks.filter((task) => task.dueDate === todayISO);
+  }, [tasks, todayISO]);
+
+  const tasksNeedingUmbrella = useMemo(() => {
+    if (!todayWeather) return [];
+
+    const dismissedForToday = dismissedMap[todayISO] || {};
+
+    return umbrellaTasks.filter(
+      (task) =>
+        !dismissedForToday[task.id] &&
+        shouldShowUmbrellaAlert([task], todayWeather),
+    );
+  }, [umbrellaTasks, dismissedMap, todayISO, todayWeather]);
 
   const [umbrellaChecked, setUmbrellaChecked] = useState(false);
 
@@ -163,7 +171,7 @@ export default function Home({
         localStorage.setItem(soundKey, "true");
       }
     }
-  }, [activeTask?.id, todayISO]);
+  }, [activeTask, todayISO]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 pb-20">
@@ -178,10 +186,10 @@ export default function Home({
         </header>
 
         {/* T上部エリア：名言・天気 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
           {/* 名言表示セクション */}
           <div
-            className={`${sectionClass} flex flex-col justify-center relative overflow-hidden group`}
+            className={`${sectionClass} flex flex-col justify-center relative overflow-hidden group  h-[284px]`}
           >
             <div className="absolute -top-4 -left-2 text-8xl text-slate-100 dark:text-slate-800 font-serif opacity-50">
               “
@@ -191,14 +199,11 @@ export default function Home({
             </h4>
 
             {loadingQuote ? (
-              <div className="h-32 w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center space-y-2 transition-all">
-                <div className="text-blue-600 dark:text-blue-400">
-                  {" "}
-                  <Spinner size={8} />
-                  <p className="text-slate-500 dark:text-slate-400 animate-pulse font-bold">
-                    {t("home.loading")}
-                  </p>
-                </div>
+              <div className="flex flex-col items-center justify-center">
+                <Spinner />
+                <p className="text-center text-slate-500 dark:text-slate-400 animate-pulse font-bold">
+                  {t("home.loading")}
+                </p>
               </div>
             ) : quote ? (
               <div className="relative z-10">
@@ -222,8 +227,10 @@ export default function Home({
           </div>
 
           {/* 天気情報セクション */}
-          <div className={sectionClass}>
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-6">
+          <div
+            className={`${sectionClass} flex flex-col justify-center relative overflow-hidden group  h-[284px]`}
+          >
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-3">
               <h4 className="text-xl font-bold text-blue-600 dark:text-blue-400">
                 {t("weather.weather_short", {
                   city: t(`cities.${selectedCity}`),
@@ -243,14 +250,11 @@ export default function Home({
             </div>
 
             {loadingWeather ? (
-              <div className="bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center space-y-4">
-                <div className="text-blue-600 dark:text-blue-400">
-                  {" "}
-                  <Spinner size={8} />
-                  <p className="text-slate-500 dark:text-slate-400 animate-pulse font-bold">
-                    {t("home.loading")}
-                  </p>
-                </div>
+              <div className="flex flex-col items-center justify-center">
+                <Spinner />
+                <p className="text-center text-slate-500 dark:text-slate-400 animate-pulse font-bold">
+                  {t("home.loading")}
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -324,7 +328,7 @@ export default function Home({
                 return (
                   <div
                     key={task.id}
-                    className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                    className={`flex items-center gap-3 p-4 rounded-2xl border transition-all duration-300 ${
                       task.done
                         ? "bg-slate-50/50 dark:bg-slate-800/20 border-slate-100 dark:border-slate-800 opacity-60"
                         : isOverdue

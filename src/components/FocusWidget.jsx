@@ -1,27 +1,32 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import WordGame from "../components/WordGame";
 import TracingGame from "../components/TracingGame";
-import { useLocation } from "react-router-dom"; // Add this import
-import { auth } from "../firebase/config";
+//【旧】import { useAuth } from "../contexts/AuthContext";
+import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+const MODES = {
+  STUDY: { focus: 2 * 60, break: 1 * 60 },
+  WORK: { focus: 0.5 * 60, break: 1.5 * 60 },
+};
 
-export default function FocusWidget() {
+export default function FocusWidget({ disabled }) {
+  const { t } = useTranslation();
+  //【旧】const { user } = useAuth();
+  const location = useLocation();
+  const isHome = location.pathname === "/";
+  const isAuth = location.pathname === "/auth";
+
   const [isOpen, setIsOpen] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
+  const [timerMode, setTimerMode] = useState("WORK");
+  const [seconds, setSeconds] = useState(MODES.WORK.focus);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameMode, setGameMode] = useState(null); // "words" | "drawing"
-  const { t } = useTranslation();
-
-
-  const FOCUS_TIME = 25 * 60;
-  const BREAK_TIME = 5 * 60;
-  const [seconds, setSeconds] = useState(FOCUS_TIME);
 
   const [showFinishedModal, setShowFinishedModal] = useState(false);
-  const location = useLocation();
-
+  const [showBreakOverModal, setShowBreakOverModal] = useState(false);
   // 音楽ステート: 0 = Off, 1 = 雨, 2 = Lo-fi
   const [musicMode, setMusicMode] = useState(0);
 
@@ -34,17 +39,56 @@ export default function FocusWidget() {
   const rainRef = useRef(
     new Audio("/sounds/pink-noise-ocean-waves-on-grainy-sand-195103.mp3"),
   );
-
   //lo-fi： https://pixabay.com/users/soundoffreedom-50460407/
   const lofiRef = useRef(new Audio("/sounds/undeground-lo-fi-400909.mp3"));
-
   //アラートの音： https://pixabay.com/sound-effects/ding-126626/
   const overRef = useRef(new Audio("/sounds/ding-126626.mp3"));
+
+  const switchTimerMode = (mode) => {
+    if (isActive) return; // Prevent switching during an active session
+    setTimerMode(mode);
+    setSeconds(MODES[mode].focus);
+    setIsBreak(false);
+  };
+
+  const handlePhaseEnd = useCallback(() => {
+    setIsActive(false);
+
+    if (!isBreak) {
+      chimeRef.current.play().catch(() => {});
+      setShowFinishedModal(true);
+      setIsBreak(true);
+      setSeconds(MODES[timerMode].break);
+    } else {
+      overRef.current.play().catch(() => {});
+      setIsBreak(false);
+      setSeconds(MODES[timerMode].focus);
+
+      setShowBreakOverModal(true);
+    }
+    setGameStarted(false);
+    setGameMode(null);
+  }, [isBreak, timerMode]);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    if (seconds <= 0) {
+      handlePhaseEnd();
+      return;
+    }
+
+    const id = setInterval(() => {
+      setSeconds((s) => s - 1);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [isActive, seconds, handlePhaseEnd]);
 
   //ループ再生とゲーム再生のロジック
   useEffect(() => {
     //すべての音楽を停止するヘルパー
-    const stopAll = () => {
+    const stopMusic = () => {
       [rainRef, lofiRef].forEach((ref) => {
         ref.current.pause();
         ref.current.currentTime = 0;
@@ -52,100 +96,111 @@ export default function FocusWidget() {
     };
 
     if (!isActive || musicMode === 0 || isBreak) {
-      stopAll();
+      stopMusic();
       return;
     }
 
     let activeAudio = musicMode === 1 ? rainRef.current : lofiRef.current;
-
     activeAudio.loop = true;
-    activeAudio
-      .play()
-      .catch((e) => {if (import.meta.env.MODE === "development") {
-          console.error(e);
-        }});
+    activeAudio.play().catch((e) => {
+      if (import.meta.env.MODE === "development") {
+        console.error(e);
+      }
+    });
 
-    return () => stopAll(); //モード切り替え時のクリーンアップ処理
+    return () => stopMusic(); //モード切り替え時のクリーンアップ処理
   }, [musicMode, isActive, isBreak]);
 
   useEffect(() => {
-    if (!isActive) return;
-
-    if (seconds === 0) {
-      handlePhaseEnd();
-      return;
-    }
-    let interval = null;
-    if (isActive && seconds > 0) {
-      interval = setInterval(() => setSeconds((s) => s - 1), 1000);
-    } else if (seconds === 0 && isActive) {
-      handlePhaseEnd();
-    }
-    return () => clearInterval(interval);
-  }, [isActive, seconds]);
-  useEffect(() => {
-    if (rainRef.current) rainRef.current.volume = 0.3;
-    if (lofiRef.current) lofiRef.current.volume = 0.3;
-    if (overRef.current) overRef.current.volume = 0.3;
+    [rainRef, lofiRef, overRef, chimeRef].forEach((ref) => {
+      if (ref.current) ref.current.volume = 0.3;
+    });
   }, []);
-  const handlePhaseEnd = () => {
-    setIsActive(false);
-    setGameStarted(false);
 
-    if (!isBreak) {
-      //作業終了 → 休憩開始
-      chimeRef.current.play().catch(() => {});
-      setShowFinishedModal(true);
-      setIsBreak(true);
-    } else {
-      //休憩終了 → 作業開始
-      overRef.current.play().catch(() => {});
+  /*【旧】 以前登録なしで使用禁止だったため削除やログアウトの際以下の掃除実施
+  useEffect(() => {
+    if (!user) {
+      setIsActive(false);
       setIsBreak(false);
-      setSeconds(FOCUS_TIME);
+      setSeconds(MODES[timerMode].focus);
+      setIsOpen(false);
+      setShowFinishedModal(false);
+      setShowBreakOverModal(false);
+      setGameStarted(false);
+      setGameMode(null);
+      setMusicMode(0);
+
+      [rainRef, lofiRef, chimeRef, overRef].forEach((ref) => {
+        ref.current.pause();
+        ref.current.currentTime = 0;
+      });
     }
-  };
+  }, [timerMode, user]);*/
+
   const toggleMusic = () => setMusicMode((prev) => (prev + 1) % 3);
+
+  const formatTime = (s) => {
+    const mins = Math.floor(s / 60);
+    const secs = Math.floor(s % 60);
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
   const handleCloseAll = () => {
     setGameStarted(false);
     setGameMode(null);
     setIsOpen(false);
   };
 
-  const formatTime = (s) => {
-    const mins = Math.floor(s / 60);
-    const secs = s % 60;
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-  };
-
-  const isHome = location.pathname === "/";
-  const user = auth.currentUser;
-  if (!isHome || !user) {
+  if (!isHome && !isAuth) {
     return null;
   }
 
   return (
-    <>
-      {/* 1. 完了モーダル */}
+    <div className={disabled ? "pointer-events-none" : ""}>
+      {/* FOCUS完了モーダル */}
       {showFinishedModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
-          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center animate-in zoom-in duration-300 max-w-xs border border-slate-200 dark:border-slate-800">
-            <span className="text-6xl">✨</span>
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center max-w-xs border border-slate-200 dark:border-slate-800">
+            <span className="text-6xl">
+              {timerMode === "WORK" ? "🌳" : "✨"}
+            </span>
             <h2 className="text-2xl font-black text-slate-800 dark:text-white mt-4">
               {t("focus.well_done")}
             </h2>
             <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm font-bold">
-              {t("focus.well_done_msg")}
+              {timerMode === "WORK"
+                ? t("focus.well_done_work_msg")
+                : t("focus.well_done_msg", { minutes: 25 })}
             </p>
             <button
               onClick={() => {
                 setShowFinishedModal(false);
-                setSeconds(BREAK_TIME);
-                setMusicMode(0);
                 setIsActive(true);
+                //【旧】if (!user) return;
               }}
               className="mt-6 w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-violet-200 dark:shadow-none active:scale-95"
             >
               {t("focus.start_break")}
+            </button>
+          </div>
+        </div>
+      )}
+      {/* BREAK完了モーダル */}
+      {showBreakOverModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center max-w-xs border-2 border-red-500 animate-in zoom-in duration-300">
+            <span className="text-6xl">⏰</span>
+            <h2 className="text-2xl font-black text-slate-800 dark:text-white mt-4">
+              {t("focus.break_ended_title")}
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm font-bold">
+              {t("focus.break_ended_msg")}
+            </p>
+            <button
+              onClick={() => setShowBreakOverModal(false)}
+              className="mt-6 w-full bg-red-500 hover:bg-red-400 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95"
+            >
+              {t("tracing_game.close")}
             </button>
           </div>
         </div>
@@ -159,7 +214,7 @@ export default function FocusWidget() {
         ${
           gameStarted
             ? "fixed inset-0 w-screen h-[100dvh] rounded-none z-[9998]"
-            : "fixed bottom-24 right-6 w-72 h-80 rounded-[40px] z-[50]"
+            : "fixed bottom-24 right-6 w-72 h-80 rounded-[40px] z-[60]"
         }
         ${
           !isOpen
@@ -170,7 +225,7 @@ export default function FocusWidget() {
         >
           <button
             onClick={handleCloseAll}
-            className="absolute -top-3 -left-3 w-8 h-8 bg-red-600 text-white rounded-full border-2 border-white font-bold flex items-center justify-center shadow-lg hover:bg-red-700 active:scale-90 z-[1100]"
+            className="absolute -top-3 -left-3 w-8 h-8 bg-red-600 text-white rounded-full border-2 border-white font-bold flex items-center justify-center shadow-lg hover:bg-red-700 active:scale-90 z-[10001]"
           >
             ✕
           </button>
@@ -180,8 +235,8 @@ export default function FocusWidget() {
               <div
                 className={`flex justify-center items-center p-4 ${gameStarted ? "bg-slate-100 dark:bg-slate-800" : ""}`}
               >
-                <div className="text-xl font-black text-violet-500 dark:text-violet-400">
-                  {t("focus.break_remaining")}： {formatTime(seconds)}
+                <div className="text-lg font-black text-violet-500 dark:text-violet-400">
+                  {t("focus.break_remaining")} : {formatTime(seconds)}
                 </div>
               </div>
 
@@ -238,14 +293,32 @@ export default function FocusWidget() {
             /* 通常の集中セッション内容 */
             <>
               <div className="flex flex-col items-center justify-around h-full py-4 px-2">
+                {!isActive && (
+                  <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 mb-2">
+                    <button
+                      onClick={() => switchTimerMode("WORK")}
+                      className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${timerMode === "WORK" ? "bg-white dark:bg-slate-100 shadow-sm text-red-500" : "bg-slate-500 text-slate-100"}`}
+                    >
+                      {t("focus.work")}
+                    </button>
+                    <button
+                      onClick={() => switchTimerMode("STUDY")}
+                      className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${timerMode === "STUDY" ? "bg-white dark:bg-slate-100 shadow-sm text-red-500" : "bg-slate-500 text-slate-100"}`}
+                    >
+                      {t("focus.study")}
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={toggleMusic}
-                  className="absolute top-6 right-6 text-2xl bg-transparent border-none transition-transform hover:scale-125 active:scale-95 cursor-pointer"
+                  className="absolute top-2 right-2 text-2xl bg-transparent border-none transition-transform hover:scale-125 active:scale-95 cursor-pointer"
                 >
                   {musicMode === 0 ? "🔇" : musicMode === 1 ? "🌧️" : "📻"}
                 </button>
                 <div className="flex flex-col items-center justify-between">
-                  <span className="text-5xl mb-2">🍅</span>
+                  <span className="text-5xl mb-2">
+                    {timerMode === "WORK" ? "💼" : "🍅"}
+                  </span>
                   <h3 className="font-black uppercase tracking-widest text-xs text-red-500 dark:text-red-400 text-center">
                     {t("focus.title")}
                   </h3>
@@ -283,7 +356,7 @@ export default function FocusWidget() {
       )}
 
       {/* 3. ラッパー要素 */}
-      <div className="fixed bottom-10 right-10 z-[9999] group">
+      <div className="fixed bottom-10 right-10 z-[50] group">
         {/* 4. ツールチップ */}
         <div
           className={`
@@ -317,9 +390,11 @@ export default function FocusWidget() {
         ${gameStarted ? "opacity-0 pointer-events-none translate-y-20" : "opacity-100"}
       `}
         >
-          <span className="select-none">{isBreak ? "🏖️" : "🍅"}</span>
+          <span className="select-none">
+            {isBreak ? "🏖️" : timerMode === "WORK" ? "💼" : "🍅"}
+          </span>
         </button>
       </div>
-    </>
+    </div>
   );
 }

@@ -39,7 +39,7 @@ function useHolidays() {
         setHolidays(data);
       } catch (err) {
         if (err.name !== "AbortError") {
-          setError("fetch_holidays_failed"); 
+          setError("fetch_holidays_failed");
         }
       }
     };
@@ -56,8 +56,8 @@ function useHolidays() {
 
 function Calendar({ tasks, weatherData, mapWeatherCode }) {
   const { t, i18n } = useTranslation();
-  
-  // date-fns locale mapping
+
+  // date-fnsの翻訳（locale）のマッピング
   const dateFnsLocale = useMemo(() => {
     switch (i18n.language) {
       case "ja":
@@ -77,6 +77,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
+  const [editMode, setEditMode] = useState("single");
   const navigate = useNavigate();
 
   const startDate = useMemo(
@@ -122,6 +123,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
     setEditTitle(task.title);
     setEditDescription(task.description || "");
     setEditDueDate(task.dueDate || "");
+    setEditMode("single");
   };
 
   const handleSaveEdit = async () => {
@@ -137,6 +139,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
         editTitle,
         editDescription,
         editDueDate,
+        editMode,
       );
       setEditingTask(null);
     } catch (error) {
@@ -186,10 +189,10 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
       if (el) {
         el.scrollIntoView({
           behavior: "smooth",
-          block: "nearest", 
+          block: "nearest",
         });
       }
-    }, 100); 
+    }, 100);
 
     return () => clearTimeout(timer);
   }, [selectedDay]);
@@ -198,9 +201,11 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
 
   if (!Array.isArray(weatherData) || weatherData.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-20">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center py-10">
         <Spinner />
-        <p className="mt-4 text-slate-500">{t("calendar.loading")}</p>
+        <p className="text-center mt-4 text-slate-500">
+          {t("calendar.loading")}
+        </p>
       </div>
     );
   }
@@ -212,14 +217,14 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 pb-20">
       <div className="max-w-4xl mx-auto p-4 space-y-6 pt-8">
-        {/* Header */}
+        {/* ヘッダー */}
         <header className="text-center py-4">
           <h1 className="text-3xl font-black text-slate-800 dark:text-white">
-            {t("calendar.title")}
+            📅 {t("calendar.title")}
           </h1>
         </header>
 
-        {/* Month Navigation Card */}
+        {/* 月のナビゲーション */}
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex justify-between items-center transition-all">
           <button
             className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 transition-colors"
@@ -228,7 +233,9 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
             ◀
           </button>
           <h4 className="text-xl font-black text-slate-800 dark:text-white">
-            {format(currentMonth, t("calendar.format_month"), { locale: dateFnsLocale })}
+            {format(currentMonth, t("calendar.format_month"), {
+              locale: dateFnsLocale,
+            })}
           </h4>
           <button
             className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 transition-colors"
@@ -238,7 +245,11 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
           </button>
         </div>
 
-        {error && <p className="text-red-600 text-center font-bold">{t(`calendar.${error}`, { defaultValue: error })}</p>}
+        {error && (
+          <p className="text-red-600 text-center font-bold">
+            {t(`calendar.${error}`, { defaultValue: error })}
+          </p>
+        )}
 
         {/* メインカレンダー表示 */}
         <div className="p-2 sm:p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -328,16 +339,17 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
 
                   {/* 祝日名 */}
                   {isHoliday && isCurrentMonth && (
-                    <div className="text-[8px] sm:text-[10px] text-red-500 font-bold leading-none mb-1 truncate w-full">
+                    <div className="text-[8px] sm:text-[10px] text-left text-red-500 font-bold leading-none mb-1 truncate w-full">
                       {holidays[dayStr]}
                     </div>
                   )}
 
-                  {/* タスク表示（最大3件） */}
+                  {/* タスク表示（最大2件） */}
                   <div className="w-full mt-1 space-y-0.5 px-0">
-                    {dayTasks.slice(0, 3).map((task) => {
+                    {dayTasks.slice(0, 2).map((task) => {
                       const isOverdue =
-                        task.dueDate < format(new Date(), "yyyy-MM-dd") && !task.done;
+                        task.dueDate < format(new Date(), "yyyy-MM-dd") &&
+                        !task.done;
 
                       return (
                         <div
@@ -360,9 +372,9 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                         </div>
                       );
                     })}
-                    {dayTasks.length > 3 && (
+                    {dayTasks.length > 2 && (
                       <div className="text-[7px] text-slate-400 font-bold pl-1">
-                        + {dayTasks.length - 3}
+                        + {dayTasks.length - 2}
                       </div>
                     )}
                   </div>
@@ -382,7 +394,9 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-xl font-black text-slate-800 dark:text-white">
-                  {format(parseISO(selectedDay), t("calendar.format_day"), { locale: dateFnsLocale })}
+                  {format(parseISO(selectedDay), t("calendar.format_day"), {
+                    locale: dateFnsLocale,
+                  })}
                 </h3>
                 {holidays[selectedDay] && (
                   <span className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded-full">
@@ -395,7 +409,9 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all"
               >
                 <span className="text-lg">＋</span>{" "}
-                <span className="hidden sm:inline">{t("calendar.add_task")}</span>
+                <span className="hidden sm:inline">
+                  {t("calendar.add_task")}
+                </span>
               </button>
             </div>
 
@@ -416,6 +432,8 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
 
                 return dayTasks.map((task) => {
                   const isEditing = editingTask?.id === task.id;
+                  const isDateDisabled = task.isRepeating || !!task.parentId;
+
                   return (
                     <div
                       key={task.id}
@@ -426,7 +444,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                       }`}
                     >
                       {isEditing ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4 animate-in fade-in duration-200">
                           <input
                             type="text"
                             value={editTitle}
@@ -440,23 +458,63 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
                             className={inputClass}
                             placeholder={t("calendar.placeholder_description")}
                           />
+
                           <div
-                            className="relative w-full sm:w-1/2 cursor-pointer"
-                            onClick={() => dateInputRef.current?.showPicker()}
+                            className="relative w-full sm:w-1/2"
+                            onClick={() =>
+                              !isDateDisabled &&
+                              dateInputRef.current?.showPicker()
+                            }
                           >
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg z-10 pointer-events-none">
-                              {" "}
-                              📅{" "}
+                              📅
                             </span>
                             <input
                               ref={dateInputRef}
-                              id="dueDateInput-create"
                               type="date"
+                              disabled={isDateDisabled}
                               value={editDueDate}
                               onChange={(e) => setEditDueDate(e.target.value)}
-                              className={`w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-800 dark:text-white appearance-none }`}
+                              className={`w-full pl-10 pr-4 py-2 rounded-xl border-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-800 dark:text-white transition-all ${
+                                isDateDisabled
+                                  ? "bg-slate-200 dark:bg-slate-900 opacity-50 cursor-not-allowed"
+                                  : "bg-slate-100 dark:bg-slate-800 cursor-pointer"
+                              }`}
                             />
                           </div>
+
+                          {(editingTask.isRepeating ||
+                            !!editingTask.parentId) && (
+                            <div className="flex gap-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                              <label className="flex items-center gap-2 cursor-pointer group">
+                                <input
+                                  type="radio"
+                                  name="editMode"
+                                  value="single"
+                                  checked={editMode === "single"}
+                                  onChange={(e) => setEditMode(e.target.value)}
+                                  className="w-4 h-4 text-blue-600"
+                                />
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 group-hover:text-blue-500">
+                                  {t("todo.apply_single")}
+                                </span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer group">
+                                <input
+                                  type="radio"
+                                  name="editMode"
+                                  value="all"
+                                  checked={editMode === "all"}
+                                  onChange={(e) => setEditMode(e.target.value)}
+                                  className="w-4 h-4 text-blue-600"
+                                />
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 group-hover:text-blue-500">
+                                  {t("todo.apply_all")}
+                                </span>
+                              </label>
+                            </div>
+                          )}
+
                           <div className="flex gap-2">
                             <button
                               onClick={handleSaveEdit}
@@ -520,7 +578,7 @@ function Calendar({ tasks, weatherData, mapWeatherCode }) {
           </div>
         )}
         {deleteModal.open && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-[9998] p-4">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
               <h2 className="text-xl font-black mb-2 text-slate-800 dark:text-white">
                 {t("calendar.delete_confirm_title")}

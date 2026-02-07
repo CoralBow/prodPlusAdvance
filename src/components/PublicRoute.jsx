@@ -6,7 +6,12 @@ import Spinner from "../components/Spinner";
 export default function PublicRoute({ children }) {
   const [user, loading] = useAuthState(auth);
 
-  if (loading) return <Spinner />;
+  if (loading)
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Spinner size={40} />
+      </div>
+    );
 
   // ユーザーが「ログイン済み」かつ「メール認証済み」の場合のみ、認証系ページからリダイレクトする
   if (user && user.emailVerified) {
