@@ -5,9 +5,13 @@ import TracingGame from "../components/TracingGame";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-const MODES = {
+/* テスト用:const MODES = {
   STUDY: { focus: 2 * 60, break: 1 * 60 },
   WORK: { focus: 0.5 * 60, break: 1.5 * 60 },
+}; */
+const MODES = {
+  STUDY: { focus: 25 * 60, break: 5 * 60 },
+  WORK: { focus: 52 * 60, break: 17 * 60 },
 };
 
 export default function FocusWidget({ disabled }) {
