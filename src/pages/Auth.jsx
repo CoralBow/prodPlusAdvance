@@ -265,7 +265,7 @@ export default function Auth() {
         >
           {/* グローバルローディング状態 */}
           {loading ? (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center py-10">
+            <div className="flex flex-col items-center justify-center py-10">
               <Spinner />
               <p className="text-center text-slate-500 dark:text-slate-400 animate-pulse font-bold">
                 {t("auth.loading")}
