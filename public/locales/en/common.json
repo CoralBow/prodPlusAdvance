@@ -4,6 +4,11 @@
     "short": "M/d (E)",
     "medium": "d/M/yyyy"
   },
+  "not_found": {
+    "home": "Go Home",
+    "title": "Oops! Page not found.",
+    "description": "It appears that this page does not exist or has been moved."
+  },
   "navigation": {
     "home": "Home",
     "todo": "Todo",
@@ -210,7 +215,8 @@
     "weather_at": "Weather ＠ {{city}}",
     "weather_short": "Weather ＠",
     "today": "Today",
-    "tomorrow": "Tomorrow",
+    "tomorrow": "tomorrow",
+    "tomorrow_short": "tmrw",
     "two_weeks_forecast": "14-Day Forecast",
     "no_data": "No data available",
     "loading": "Loading...",

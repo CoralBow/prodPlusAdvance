@@ -4,6 +4,11 @@
     "short": "M月d日 (E)",
     "medium": "yyyy年d日M月"
   },
+  "not_found": {
+    "home": "ホームへ戻る",
+    "title": "おっと！ページが見つかりません。",
+    "description": "このページは存在しないか、移動されたようです。"
+  },
   "navigation": {
     "home": "ホーム",
     "todo": "TODO",
@@ -211,6 +216,7 @@
     "weather_short": "天気 ＠",
     "today": "今日",
     "tomorrow": "明日",
+    "tomorrow_short": "明日",
     "two_weeks_forecast": "二週間の天気予報",
     "no_data": "データがありません",
     "loading": "読み込み中...",

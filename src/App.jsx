@@ -14,6 +14,7 @@ import PublicRoute from "./components/PublicRoute"; // 認証必須ルート（�
 import FocusWidget from "./components/FocusWidget";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import NotFound from "./pages/NotFound";
 import cities from "./data/cities";
 import mapWeatherCode from "./data/weather";
 import cleanupOldWeatherCache from "./utils/cleanupOldWeatherCache";
@@ -245,6 +246,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       {user && user.emailVerified && (

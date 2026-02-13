@@ -274,7 +274,7 @@ function Header({ mobileMenuOpen, setMobileMenuOpen }) {
             <button
               onClick={() => setMobileMenuOpen(false)}
               className="
-    w-full flex justify-center pt-3 pb-1
+    w-full flex justify-center pt-3 pb-1 bg-transparent
     active:scale-95 transition
   "
               aria-label="Close menu"

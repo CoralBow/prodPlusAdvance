@@ -185,11 +185,11 @@ export default function Home({
           </p>
         </header>
 
-        {/* T上部エリア：名言・天気 */}
+        {/* 上部エリア：名言・天気 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
           {/* 名言表示セクション */}
           <div
-            className={`${sectionClass} flex flex-col justify-center relative overflow-hidden group  h-[284px]`}
+            className={`${sectionClass} flex flex-col justify-center relative overflow-hidden group  min-h-[320px] md:min-h-[284px]`}
           >
             <div className="absolute -top-4 -left-2 text-8xl text-slate-100 dark:text-slate-800 font-serif opacity-50">
               “
@@ -228,7 +228,7 @@ export default function Home({
 
           {/* 天気情報セクション */}
           <div
-            className={`${sectionClass} flex flex-col justify-center relative overflow-hidden group  h-[284px]`}
+            className={`${sectionClass} flex flex-col justify-center relative overflow-hidden group  min-h-[320px] md:min-h-[284px]`}
           >
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-3">
               <h4 className="text-xl font-bold text-blue-600 dark:text-blue-400">
@@ -267,8 +267,8 @@ export default function Home({
                       className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-black text-slate-400 uppercase">
-                          {i === 0 ? t("weather.today") : t("weather.tomorrow")}
+                        <p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase">
+                          {i === 0 ? t("weather.today") : t("weather.tomorrow_short")}
                           ・
                           {format(parseISO(d.date), t("date.short"), {
                             locale: dateLocale,

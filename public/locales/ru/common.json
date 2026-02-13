@@ -4,6 +4,11 @@
     "short": "d/M (EEEEEE)",
     "medium": "d/M/yyyy"
   },
+  "not_found": {
+    "go_home": "Вернуться на главную",
+    "title": "Упс! Страница не найдена.",
+    "description": "Похоже, этой страницы не существует или она была перемещена."
+  },
   "navigation": {
     "home": "Главная",
     "todo": "Задачи",
@@ -210,6 +215,7 @@
     "weather_short": "Погода в городе",
     "today": "Сегодня",
     "tomorrow": "Завтра",
+    "tomorrow_short": "Завтра",
     "two_weeks_forecast": "Прогноз на 14 дней",
     "no_data": "Нет данных",
     "loading": "Загрузка...",
